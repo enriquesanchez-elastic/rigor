@@ -496,6 +496,39 @@ See [github-action/README.md](../github-action/README.md) for full options.
     sarif_file: rigor-results.sarif
 ```
 
+## Test relevance: valid vs. meaningful
+
+**Valid** tests are well-formed (correct syntax, no obvious anti-patterns). Rigor’s static analysis and score cover this: assertion quality, isolation, error coverage, boundary checks, etc.
+
+**Relevant / meaningful** tests actually test what they claim to test and would catch real bugs. Rigor addresses this in two ways:
+
+### 1. Static relevance (analyzer rules)
+
+These rules flag tests that are not *meaningful* even when they run and have assertions:
+
+- **Assertion–intent mismatch** (`assertion-intent-mismatch`): The test name implies a specific outcome (e.g. “returns 404”, “throws when invalid”, “is empty”) but no assertion actually verifies it. Example: a test named “returns 404 when not found” that only does `expect(res).toBeDefined()` — it doesn’t test what it says.
+- **Trivial assertions** (`trivial-assertion`): Assertions that always pass and don’t verify behavior (e.g. `expect(1).toBe(1)`, `expect(true).toBe(true)`). Such tests add noise and false confidence.
+
+Use these to catch tests that “make no sense” or don’t verify what their name claims.
+
+### 2. Mutation-driven relevance (`--mutate`)
+
+When mutants **survive** (tests still pass after mutating the source), that means tests did not react to that behavior — i.e. they are not relevant to those code paths.
+
+1. **Run mutation testing** on a single test file that has a mapped source file:
+   ```bash
+   rigor path/to/file.test.ts --mutate
+   ```
+   Rigor mutates the source (e.g. `>=` → `>`, `return x` → `return null`), runs your tests, and reports how many mutants were **killed** (tests failed) vs. **survived** (tests still passed).
+
+2. **Use the relevance section** in the output when mutants survive. It reports:
+   - Which **source lines** had at least one survived mutant (tests did not catch that change).
+   - **Suggestions** by mutation type (e.g. “Assert on the exact return value so null/undefined mutants are caught”, “Add boundary tests so comparison mutants are caught”).
+
+3. **Improve tests** so they assert on the exact outcomes (return value, boundaries, array length, etc.). Then run `--mutate` again; the kill rate should go up and the “Test relevance” list should shrink.
+
+**Summary:** Use the **quality score** for “are my tests valid and well-structured?” Use **static relevance rules** for “does this test verify what it claims?” and **mutation testing + relevance** for “do my tests actually catch relevant bugs?”
+
 ## Scoring
 
 ### Grade Scale
@@ -561,6 +594,8 @@ Each category contributes up to 25 points:
 | `mutation-resistant` | Info | Assertion may let mutants survive (e.g. toBeGreaterThan(0) vs toBe(3)) |
 | `boundary-specificity` | Info | Boundary/edge test doesn't assert exact value |
 | `state-verification` | Info | Test may have side effects but only checks return value |
+| `assertion-intent-mismatch` | Warning | Test name suggests an outcome (returns X, throws, 404, empty) but no assertion verifies it |
+| `trivial-assertion` | Warning/Error | Assertion always passes and doesn't verify behavior (e.g. expect(1).toBe(1)) |
 
 RTL rules run only when `@testing-library/react` (or `@testing-library/dom`) is imported.
 

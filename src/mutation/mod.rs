@@ -1,11 +1,13 @@
 //! Fast mutation mode - run a small set of strategic mutants and report kill rate.
 
 mod operators;
+mod relevance;
 mod reporter;
 mod runner;
 mod sampler;
 
 pub use operators::{apply_mutation, Mutation, MutationOperator};
+pub use relevance::{relevance_summary, RelevanceSummary, SurvivedAtLine};
 pub use reporter::report as report_mutation_result;
 
 use std::path::Path;

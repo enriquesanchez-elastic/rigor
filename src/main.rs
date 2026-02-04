@@ -340,8 +340,11 @@ fn run() -> Result<ExitCode> {
                         }
                     }
                 }
-            } else if !args.quiet {
-                eprintln!("{}: --mutate requires a source file (analyzed file must map to a .ts source)", "Warning".yellow());
+            } else if !args.quiet && !is_likely_e2e_test(result.file_path.as_path()) {
+                eprintln!(
+                    "{}: --mutate requires a source file (test file must map to a .ts source, e.g. foo.test.ts → foo.ts). Cypress/e2e tests often have no single source.",
+                    "Warning".yellow()
+                );
             }
         } else if !args.quiet {
             eprintln!("{}: --mutate only works with a single test file", "Warning".yellow());
@@ -662,6 +665,12 @@ fn collect_test_files(
     files.sort();
 
     Ok(files)
+}
+
+/// True if the path looks like an e2e/integration test (no single source file expected for --mutate).
+fn is_likely_e2e_test(path: &Path) -> bool {
+    let s = path.to_string_lossy();
+    s.contains("e2e") || s.contains("integration")
 }
 
 fn is_test_file(path: &std::path::Path, test_patterns: &[&str]) -> bool {

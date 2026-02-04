@@ -174,6 +174,10 @@ pub enum Rule {
     BoundarySpecificity,
     /// Test doesn't verify state changes, only return value
     StateVerification,
+    /// Test name suggests a specific outcome but no assertion verifies it (relevance)
+    AssertionIntentMismatch,
+    /// Test only asserts on constants or trivial values (not meaningful)
+    TrivialAssertion,
 }
 
 impl std::fmt::Display for Rule {
@@ -202,6 +206,8 @@ impl std::fmt::Display for Rule {
             Rule::MutationResistant => write!(f, "mutation-resistant"),
             Rule::BoundarySpecificity => write!(f, "boundary-specificity"),
             Rule::StateVerification => write!(f, "state-verification"),
+            Rule::AssertionIntentMismatch => write!(f, "assertion-intent-mismatch"),
+            Rule::TrivialAssertion => write!(f, "trivial-assertion"),
         }
     }
 }

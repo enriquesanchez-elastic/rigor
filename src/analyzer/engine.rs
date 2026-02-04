@@ -9,10 +9,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::rules::{
-    AnalysisRule, AssertionQualityRule, AsyncPatternsRule, BoundaryConditionsRule,
+    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule, BoundaryConditionsRule,
     BoundarySpecificityRule, DebugCodeRule, ErrorCoverageRule, FlakyPatternsRule, InputVarietyRule,
     MockAbuseRule, MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule,
-    StateVerificationRule, TestIsolationRule,
+    StateVerificationRule, TestIsolationRule, TrivialAssertionRule,
 };
 use super::ScoreCalculator;
 
@@ -185,6 +185,8 @@ impl AnalysisEngine {
         let mutation_resistant_rule = MutationResistantRule::new();
         let boundary_specificity_rule = BoundarySpecificityRule::new();
         let state_verification_rule = StateVerificationRule::new();
+        let assertion_intent_rule = AssertionIntentRule::new();
+        let trivial_assertion_rule = TrivialAssertionRule::new();
 
         // Collect all issues
         let mut issues = Vec::new();
@@ -202,6 +204,8 @@ impl AnalysisEngine {
         issues.extend(mutation_resistant_rule.analyze(&tests, &source, &tree));
         issues.extend(boundary_specificity_rule.analyze(&tests, &source, &tree));
         issues.extend(state_verification_rule.analyze(&tests, &source, &tree));
+        issues.extend(assertion_intent_rule.analyze(&tests, &source, &tree));
+        issues.extend(trivial_assertion_rule.analyze(&tests, &source, &tree));
 
         // Apply ignore comments: filter issues that have rigor-ignore on their line
         let ignore_directives = IgnoreDirectives::parse(&source);

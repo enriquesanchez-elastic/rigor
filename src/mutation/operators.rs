@@ -24,6 +24,7 @@ pub struct MutationOperator {
 
 fn make_ops() -> Vec<MutationOperator> {
     vec![
+        // --- Boundary / comparison (existing) ---
         MutationOperator {
             pattern: Regex::new(r">=").unwrap(),
             replacements: vec![">"],
@@ -34,7 +35,6 @@ fn make_ops() -> Vec<MutationOperator> {
             replacements: vec!["<"],
             description: "<= to <",
         },
-        // Match " > " and " < " (space-surrounded) to avoid needing look-around; regex crate doesn't support it
         MutationOperator {
             pattern: Regex::new(r" > ").unwrap(),
             replacements: vec![" >="],
@@ -45,6 +45,7 @@ fn make_ops() -> Vec<MutationOperator> {
             replacements: vec![" <="],
             description: "< to <=",
         },
+        // --- Boolean (existing) ---
         MutationOperator {
             pattern: Regex::new(r"\btrue\b").unwrap(),
             replacements: vec!["false"],
@@ -55,6 +56,7 @@ fn make_ops() -> Vec<MutationOperator> {
             replacements: vec!["true"],
             description: "false to true",
         },
+        // --- Arithmetic (existing) ---
         MutationOperator {
             pattern: Regex::new(r" \+ ").unwrap(),
             replacements: vec![" - "],
@@ -70,6 +72,7 @@ fn make_ops() -> Vec<MutationOperator> {
             replacements: vec![" / "],
             description: "* to /",
         },
+        // --- Equality (existing) ---
         MutationOperator {
             pattern: Regex::new(r" === ").unwrap(),
             replacements: vec![" != "],
@@ -79,6 +82,77 @@ fn make_ops() -> Vec<MutationOperator> {
             pattern: Regex::new(r" !== ").unwrap(),
             replacements: vec![" == "],
             description: "!= to ==",
+        },
+        // --- 2. String mutations ---
+        // Non-empty double-quoted string -> empty string
+        MutationOperator {
+            pattern: Regex::new(r#""[^"]+""#).unwrap(),
+            replacements: vec![r#""""#],
+            description: "string to empty string",
+        },
+        // Non-empty single-quoted string -> empty string
+        MutationOperator {
+            pattern: Regex::new(r"'[^']+'").unwrap(),
+            replacements: vec!["''"],
+            description: "string to empty string (single quote)",
+        },
+        // Empty double-quoted string -> one space (so mutant is still valid)
+        MutationOperator {
+            pattern: Regex::new(r#""""#).unwrap(),
+            replacements: vec![r#"" ""#],
+            description: "empty string to space",
+        },
+        // Empty single-quoted string -> one space
+        MutationOperator {
+            pattern: Regex::new(r"''").unwrap(),
+            replacements: vec!["' '"],
+            description: "empty string to space (single quote)",
+        },
+        // --- 4. Array mutations ---
+        // Array literal with comma (2+ elements) -> empty array
+        MutationOperator {
+            pattern: Regex::new(r"\[[^\]]*,[^\]]*\]").unwrap(),
+            replacements: vec!["[]"],
+            description: "array literal to empty array",
+        },
+        // Empty array -> [0]
+        MutationOperator {
+            pattern: Regex::new(r"\[\s*\]").unwrap(),
+            replacements: vec!["[0]"],
+            description: "empty array to [0]",
+        },
+        // Index [0] -> [1] (off-by-one)
+        MutationOperator {
+            pattern: Regex::new(r"\[0\]").unwrap(),
+            replacements: vec!["[1]"],
+            description: "index 0 to 1",
+        },
+        // --- 6. Return value mutations ---
+        MutationOperator {
+            pattern: Regex::new(r"return\s+[^;]+;").unwrap(),
+            replacements: vec!["return null;", "return undefined;"],
+            description: "return to null/undefined",
+        },
+        // --- 7. Increment / decrement ---
+        MutationOperator {
+            pattern: Regex::new(r"\+\+").unwrap(),
+            replacements: vec!["--"],
+            description: "++ to --",
+        },
+        MutationOperator {
+            pattern: Regex::new(r"--").unwrap(),
+            replacements: vec!["++"],
+            description: "-- to ++",
+        },
+        MutationOperator {
+            pattern: Regex::new(r"\+= ?1\b").unwrap(),
+            replacements: vec!["-= 1"],
+            description: "+= 1 to -= 1",
+        },
+        MutationOperator {
+            pattern: Regex::new(r"-= ?1\b").unwrap(),
+            replacements: vec!["+= 1"],
+            description: "-= 1 to += 1",
         },
     ]
 }
@@ -145,5 +219,54 @@ mod tests {
         let s = "if (x >= 0) return true;";
         let mutations = generate_mutations(s);
         assert!(!mutations.is_empty());
+    }
+
+    #[test]
+    fn test_string_mutations() {
+        let s = r#"const x = "hello"; const y = '';"#;
+        let mutations = generate_mutations(s);
+        let string_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("string") || m.description.contains("empty"))
+            .collect();
+        assert!(!string_ops.is_empty(), "should have string mutations");
+        let applied = apply_mutation(s, &mutations[0]);
+        assert_ne!(applied, s);
+    }
+
+    #[test]
+    fn test_array_mutations() {
+        let s = "const a = [1, 2]; const b = []; const c = arr[0];";
+        let mutations = generate_mutations(s);
+        let array_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("array") || m.description.contains("index"))
+            .collect();
+        assert!(!array_ops.is_empty());
+    }
+
+    #[test]
+    fn test_return_mutations() {
+        let s = "function f() { return 42; }";
+        let mutations = generate_mutations(s);
+        let return_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("return"))
+            .collect();
+        assert!(!return_ops.is_empty());
+        let null_mut = mutations.iter().find(|m| m.replacement == "return null;").unwrap();
+        let applied = apply_mutation(s, null_mut);
+        assert!(applied.contains("return null;"));
+    }
+
+    #[test]
+    fn test_increment_decrement_mutations() {
+        let s = "let i = 0; i++; i--; i += 1; i -= 1;";
+        let mutations = generate_mutations(s);
+        let inc_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("++") || m.description.contains("--") || m.description.contains("+=") || m.description.contains("-="))
+            .collect();
+        assert!(!inc_ops.is_empty());
     }
 }

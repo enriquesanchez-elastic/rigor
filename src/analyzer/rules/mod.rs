@@ -1,6 +1,7 @@
 //! Analysis rules for test quality
 
 pub mod assertion_quality;
+pub mod assertion_intent;
 pub mod boundary_conditions;
 pub mod boundary_specificity;
 pub mod debug_code;
@@ -14,8 +15,10 @@ pub mod naming_quality;
 pub mod react_testing_library;
 pub mod state_verification;
 pub mod test_isolation;
+pub mod trivial_assertion;
 
 pub use assertion_quality::AssertionQualityRule;
+pub use assertion_intent::AssertionIntentRule;
 pub use boundary_specificity::BoundarySpecificityRule;
 pub use async_patterns::AsyncPatternsRule;
 pub use boundary_conditions::BoundaryConditionsRule;
@@ -29,6 +32,7 @@ pub use naming_quality::NamingQualityRule;
 pub use react_testing_library::ReactTestingLibraryRule;
 pub use state_verification::StateVerificationRule;
 pub use test_isolation::TestIsolationRule;
+pub use trivial_assertion::TrivialAssertionRule;
 
 use crate::{Issue, TestCase};
 use tree_sitter::Tree;

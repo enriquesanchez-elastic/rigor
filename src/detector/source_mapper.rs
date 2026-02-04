@@ -431,10 +431,14 @@ impl SourceMapper {
             ".test.tsx",
             ".spec.ts",
             ".spec.tsx",
+            ".cy.ts",
+            ".cy.tsx",
             ".test.js",
             ".test.jsx",
             ".spec.js",
             ".spec.jsx",
+            ".cy.js",
+            ".cy.jsx",
             "_test.ts",
             "_test.tsx",
             "_spec.ts",
@@ -576,6 +580,10 @@ mod tests {
         assert_eq!(
             SourceMapper::strip_test_suffix("Button.test.mts"),
             Some("Button".to_string())
+        );
+        assert_eq!(
+            SourceMapper::strip_test_suffix("conversations.cy.ts"),
+            Some("conversations".to_string())
         );
     }
 

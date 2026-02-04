@@ -125,6 +125,11 @@ fn rule_from_id(id: &str) -> Option<Rule> {
         "rtl-prefer-screen" => Some(Rule::RtlPreferScreen),
         "rtl-prefer-semantic" => Some(Rule::RtlPreferSemantic),
         "rtl-prefer-user-event" => Some(Rule::RtlPreferUserEvent),
+        "mutation-resistant" => Some(Rule::MutationResistant),
+        "boundary-specificity" => Some(Rule::BoundarySpecificity),
+        "state-verification" => Some(Rule::StateVerification),
+        "assertion-intent-mismatch" => Some(Rule::AssertionIntentMismatch),
+        "trivial-assertion" => Some(Rule::TrivialAssertion),
         _ => None,
     }
 }

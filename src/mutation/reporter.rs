@@ -1,9 +1,10 @@
 //! Report mutation testing results.
 
+use super::relevance::relevance_summary;
 use super::MutationResult;
 use colored::Colorize;
 
-/// Print mutation result to stdout.
+/// Print mutation result to stdout, including a relevance section when mutants survived.
 pub fn report(result: &MutationResult) {
     let total = result.total;
     let killed = result.killed;
@@ -35,5 +36,31 @@ pub fn report(result: &MutationResult) {
             );
         }
     }
+
+    // Relevance: interpret survived mutants as "tests not relevant to these behaviors"
+    if survived > 0 {
+        let rel = relevance_summary(result);
+        println!();
+        println!("   {}", "Test relevance".bold());
+        println!(
+            "   {} source line(s) had at least one survived mutant → tests did not catch these changes.",
+            rel.lines_with_survived
+        );
+        let mut lines: Vec<_> = rel.survived_by_line.keys().copied().collect();
+        lines.sort_unstable();
+        for line in lines {
+            let at = rel.survived_by_line.get(&line).unwrap();
+            let descs: Vec<_> = at.iter().map(|s| s.description.as_str()).collect();
+            println!("   L{}: {} ({} survived)", line, descs.join("; "), at.len());
+        }
+        if !rel.suggestions.is_empty() {
+            println!();
+            println!("   {}", "Suggestions:".bold());
+            for s in &rel.suggestions {
+                println!("   • {}", s);
+            }
+        }
+    }
+
     println!();
 }
