@@ -1,0 +1,40 @@
+{
+  "name": "rigor-cli",
+  "version": "0.1.0",
+  "description": "Fast Test Quality Linting for TypeScript",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rigor-dev/rigor.git"
+  },
+  "bugs": "https://github.com/rigor-dev/rigor/issues",
+  "homepage": "https://github.com/rigor-dev/rigor#readme",
+  "bin": {
+    "rigor": "./bin/rigor.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "keywords": [
+    "testing",
+    "quality",
+    "typescript",
+    "jest",
+    "vitest",
+    "playwright",
+    "test-quality",
+    "lint"
+  ]
+}

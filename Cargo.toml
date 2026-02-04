@@ -1,0 +1,39 @@
+[package]
+name = "rigor"
+version = "0.1.0"
+edition = "2021"
+description = "Test Quality Analyzer for TypeScript"
+authors = ["Rigor Team"]
+
+[dependencies]
+tree-sitter = "0.26"
+tree-sitter-typescript = "0.23"
+clap = { version = "4", features = ["derive"] }
+colored = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2"
+glob = "0.3"
+globset = "0.4"
+anyhow = "1"
+chrono = "0.4"
+notify = "8"
+regex = "1"
+thiserror = "2"
+# Performance
+rayon = "1.10"
+sha2 = "0.10"
+hex = "0.4"
+# AI integration
+reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+
+[features]
+default = []
+ai = ["reqwest"]
+
+[[bin]]
+name = "rigor"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"
