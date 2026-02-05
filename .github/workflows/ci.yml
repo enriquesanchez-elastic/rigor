@@ -220,6 +220,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: rigor-*
 
       - name: Prepare release assets
         run: |
