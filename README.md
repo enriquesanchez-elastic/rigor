@@ -215,12 +215,32 @@ rigor init --dir ./my-app
 | `--threshold N`, `-t N` | Exit with code 1 if score is below N |
 | `--fix` | Generate AI prompt for improving tests |
 | `--fix-output FILE` | Write AI prompt to file instead of stdout |
+| `--apply` | With `--fix`: run AI suggestion and prompt to apply (requires `RIGOR_APPLY_CMD` or `ANTHROPIC_API_KEY`) |
 | `--no-source` | Skip source file analysis |
 | `--config PATH` | Path to config file (default: search `.rigorrc.json` in current dir and parents) |
 | `--watch` | Watch for file changes and re-analyze |
 | `--sarif` | Output in SARIF 2.1 format for GitHub Code Scanning |
 | `--staged` | Only analyze staged (git) test files (for pre-commit) |
+| `--changed` | Only analyze files changed since last commit (git diff HEAD + untracked) |
 | `--mutate[=MODE]` | Run fast mutation testing: quick (10), medium (30), full. Set `RIGOR_TEST_CMD` for test command (default: npm test) |
+| `--coverage PATH` | Load Istanbul/c8/nyc coverage JSON (experimental; loaded but not yet integrated into scoring) |
+
+#### Performance Options
+
+| Option | Description |
+|--------|-------------|
+| `--parallel` | Run analysis in parallel (auto-enabled for >10 files) |
+| `--jobs N` | Number of parallel threads (default: CPU cores) |
+| `--no-cache` | Disable caching (re-analyze all files even if unchanged) |
+| `--clear-cache` | Clear the analysis cache before running |
+
+#### Caching
+
+Rigor caches analysis results in `.rigor-cache.json` in your project root. When a file hasn't changed (based on content hash), the cached result is used instead of re-analyzing. This significantly speeds up repeated runs.
+
+- Cache is automatically enabled and saved after each run
+- Use `--no-cache` to force re-analysis of all files
+- Use `--clear-cache` to delete the cache before running
 
 ### Configuration (`.rigorrc.json`)
 
@@ -519,7 +539,21 @@ When mutants **survive** (tests still pass after mutating the source), that mean
    ```bash
    rigor path/to/file.test.ts --mutate
    ```
-   Rigor mutates the source (e.g. `>=` → `>`, `return x` → `return null`), runs your tests, and reports how many mutants were **killed** (tests failed) vs. **survived** (tests still passed).
+   Rigor mutates the source, runs your tests, and reports how many mutants were **killed** (tests failed) vs. **survived** (tests still passed).
+
+   **Mutation operators (28 total):**
+
+   | Category | Mutations |
+   |----------|-----------|
+   | **Boundary** | `>=` → `>`, `<=` → `<`, `>` → `>=`, `<` → `<=` |
+   | **Boolean** | `true` → `false`, `false` → `true` |
+   | **Arithmetic** | `+` → `-`, `-` → `+`, `*` → `/` |
+   | **Equality** | `===` → `!=`, `!==` → `==` |
+   | **String** | `"string"` → `""`, `""` → `" "` (single quotes too) |
+   | **Array** | `[a, b]` → `[]`, `[]` → `[0]`, `[0]` → `[1]` |
+   | **Return** | `return x` → `return null`, `return x` → `return undefined` |
+   | **Increment** | `++` → `--`, `--` → `++`, `+= 1` → `-= 1`, `-= 1` → `+= 1` |
+   | **TypeScript** | `?.` → `.` (optional chaining), `??` → `\|\|` (nullish coalescing), `!.` → `.` (non-null assertion) |
 
 2. **Use the relevance section** in the output when mutants survive. It reports:
    - Which **source lines** had at least one survived mutant (tests did not catch that change).
@@ -650,6 +684,7 @@ Each category contributes up to 25 points:
 |------|----------|-------------|
 | `weak-assertion` | Warning | Assertion doesn't verify a specific value |
 | `no-assertions` | Error | Test has no expect() calls |
+| `empty-test` | Error | Test block has no body or statements |
 | `skipped-test` | Info | Test is marked with .skip or .todo |
 | `snapshot-overuse` | Warning | File or test uses only snapshots; >50% snapshot assertions |
 | `missing-error-test` | Warning | Throwable function lacks error test |
@@ -672,6 +707,9 @@ Each category contributes up to 25 points:
 | `state-verification` | Info | Test may have side effects but only checks return value |
 | `assertion-intent-mismatch` | Warning | Test name suggests an outcome (returns X, throws, 404, empty) but no assertion verifies it |
 | `trivial-assertion` | Warning/Error | Assertion always passes and doesn't verify behavior (e.g. expect(1).toBe(1)) |
+| `return-path-coverage` | Warning | Return paths in source file not covered by test assertions |
+| `behavioral-completeness` | Info | Test only verifies partial behavior (e.g., checks one field but not others) |
+| `side-effect-not-verified` | Info | Function has side effects (writes, API calls) but test doesn't verify them |
 
 RTL rules run only when `@testing-library/react` (or `@testing-library/dom`) is imported.
 
@@ -695,12 +733,37 @@ Save to a file for use with your preferred AI tool:
 rigor src/auth.test.ts --fix --fix-output prompt.md
 ```
 
-**Apply with AI:** Use `--fix --apply` and set `RIGOR_APPLY_CMD` to a command that reads the prompt on stdin and prints the improved code (e.g. a script that calls OpenAI). Rigor will show the suggestion and prompt to apply:
+### Auto-Apply with `--apply`
+
+Use `--fix --apply` to automatically generate and apply AI suggestions. There are two ways to use this:
+
+**Option 1: Built-in Claude Integration**
+
+Build Rigor with the AI feature enabled and set your API key:
+
+```bash
+# Build with AI feature
+cargo build --release --features ai
+
+# Set your Anthropic API key
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Run with auto-apply
+rigor src/auth.test.ts --fix --apply
+```
+
+Rigor will call the Claude API, show the suggested improvements, and prompt you to apply them.
+
+**Option 2: Custom Command**
+
+Set `RIGOR_APPLY_CMD` to a command that reads the prompt on stdin and prints the improved code:
 
 ```bash
 export RIGOR_APPLY_CMD="node my-openai-script.js"
 rigor src/auth.test.ts --fix --apply
 ```
+
+The command receives the full improvement prompt on stdin and should output the improved test file code.
 
 ## Framework Support
 
@@ -714,6 +777,19 @@ Rigor automatically detects these test frameworks:
 - **React Testing Library** - When `@testing-library/react` is imported; enables RTL-specific rules
 
 Detection is based on imports and code patterns. The framework affects how certain patterns are interpreted.
+
+## Test Type Classification
+
+Rigor classifies tests into four types, which affects scoring weights (see [Scoring](#scoring)):
+
+| Type | How It's Detected |
+|------|-------------------|
+| **E2E** | File path contains `e2e`, `.e2e.`, `/e2e/`, `.cy.`, `/cypress/`; or Playwright/Cypress framework detected |
+| **Integration** | File path contains `integration` or `.integration.` |
+| **Component** | File path contains `component` or `.component.`; or `@testing-library`, `render()`, `screen.get` patterns found |
+| **Unit** | Default fallback when no other type matches |
+
+Test type affects which categories are emphasized in scoring. For example, E2E tests de-emphasize boundary conditions (less relevant to user flows) while emphasizing assertion quality and test isolation.
 
 ## MCP Server (Claude / Cursor)
 
@@ -831,6 +907,58 @@ describe('Session Management', () => {
 });
 ```
 
+## Troubleshooting
+
+### "No source file found" for --mutate
+
+Mutation testing requires a mapped source file. Rigor uses naming conventions to find sources:
+- `auth.test.ts` → `auth.ts` (same directory)
+- `__tests__/Button.test.tsx` → `Button.tsx` (parent directory)
+- `tests/api/user.test.ts` → `src/api/user.ts` (parallel structure)
+
+**Solutions:**
+1. Ensure source file exists with matching name (without `.test`/`.spec`)
+2. Configure explicit mappings in `.rigorrc.json`:
+   ```json
+   {
+     "sourceMapping": {
+       "mode": "manual",
+       "mappings": { "tests/**/*.test.ts": "src/**/*.ts" }
+     }
+   }
+   ```
+3. E2E tests (Cypress/Playwright) typically don't have single source files — this warning is expected
+
+### Framework detected incorrectly
+
+Force the framework in config:
+```json
+{ "framework": "vitest" }
+```
+
+Or check that your imports are explicit (e.g., `import { vi } from 'vitest'`).
+
+### Cache issues
+
+If you suspect stale results:
+```bash
+rigor src/ --clear-cache
+# or
+rigor src/ --no-cache
+```
+
+### Score seems wrong
+
+- Use `--verbose` to see all issues and how each affects the score
+- Check the test type classification (E2E tests use different weights)
+- Verify the source file was found (affects error/boundary coverage scoring)
+
+### AI --apply not working
+
+Ensure one of:
+1. Built with `--features ai` AND `ANTHROPIC_API_KEY` is set
+2. `RIGOR_APPLY_CMD` is set to a valid command
+
 ## Limitations
 
 - **Static analysis only** - Cannot detect runtime issues; mock/flaky detection is heuristic (e.g. looks for `useFakeTimers`, `jest.mock`)
@@ -838,6 +966,7 @@ describe('Session Management', () => {
 - **Heuristic-based** - May produce false positives for complex patterns
 - **Source mapping** - Relies on naming conventions to find source files
 - **Watch mode** - Requires a supported filesystem (uses `notify`); best used from project root
+- **Coverage integration** - `--coverage` loads Istanbul data but is not yet integrated into scoring (experimental)
 
 ## License
 
