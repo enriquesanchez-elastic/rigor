@@ -20,9 +20,16 @@ npm install -g rigor-cli
 npx rigor-cli src/
 ```
 
+**Pre-built binaries:**
+
+Download from [GitHub Releases](https://github.com/enriquesanchez-elastic/rigor/releases):
+- Linux (x86_64, ARM64)
+- macOS (Intel, Apple Silicon)
+- Windows (x86_64)
+
 **From source:**
 ```bash
-git clone https://github.com/rigor-dev/rigor.git && cd rigor
+git clone https://github.com/enriquesanchez-elastic/rigor.git && cd rigor
 cargo build --release
 ./target/release/rigor --help
 ```
