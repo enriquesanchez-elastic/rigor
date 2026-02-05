@@ -6,6 +6,7 @@
 pub mod analyzer;
 pub mod cache;
 pub mod config;
+pub mod coverage;
 pub mod detector;
 pub mod history;
 pub mod mcp;
@@ -34,6 +35,9 @@ pub struct AnalysisResult {
     pub stats: TestStats,
     /// Detected test framework
     pub framework: TestFramework,
+    /// Detected test type (unit, e2e, component, integration)
+    #[serde(default)]
+    pub test_type: TestType,
     /// Path to the corresponding source file (if found)
     pub source_file: Option<PathBuf>,
 }
@@ -178,6 +182,12 @@ pub enum Rule {
     AssertionIntentMismatch,
     /// Test only asserts on constants or trivial values (not meaningful)
     TrivialAssertion,
+    /// Return paths in source not covered by tests
+    ReturnPathCoverage,
+    /// Test only verifies partial behavior (not full return shape)
+    BehavioralCompleteness,
+    /// Function has side effects but test doesn't verify them
+    SideEffectNotVerified,
 }
 
 impl std::fmt::Display for Rule {
@@ -208,6 +218,9 @@ impl std::fmt::Display for Rule {
             Rule::StateVerification => write!(f, "state-verification"),
             Rule::AssertionIntentMismatch => write!(f, "assertion-intent-mismatch"),
             Rule::TrivialAssertion => write!(f, "trivial-assertion"),
+            Rule::ReturnPathCoverage => write!(f, "return-path-coverage"),
+            Rule::BehavioralCompleteness => write!(f, "behavioral-completeness"),
+            Rule::SideEffectNotVerified => write!(f, "side-effect-not-verified"),
         }
     }
 }
@@ -268,6 +281,94 @@ impl std::fmt::Display for TestFramework {
     }
 }
 
+/// Type of test (affects scoring weights)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TestType {
+    /// Unit tests - test individual functions/modules
+    #[default]
+    Unit,
+    /// End-to-end tests - test full user flows
+    E2e,
+    /// Component tests - test UI components
+    Component,
+    /// Integration tests - test multiple modules together
+    Integration,
+}
+
+impl std::fmt::Display for TestType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TestType::Unit => write!(f, "Unit"),
+            TestType::E2e => write!(f, "E2E"),
+            TestType::Component => write!(f, "Component"),
+            TestType::Integration => write!(f, "Integration"),
+        }
+    }
+}
+
+/// Scoring weights for different test types
+/// Each value is a percentage (0-100) that determines category contribution
+#[derive(Debug, Clone, Copy)]
+pub struct ScoringWeights {
+    pub assertion_quality: u8,
+    pub error_coverage: u8,
+    pub boundary_conditions: u8,
+    pub test_isolation: u8,
+    pub input_variety: u8,
+}
+
+impl ScoringWeights {
+    /// Get default weights for a test type
+    pub fn for_test_type(test_type: TestType) -> Self {
+        match test_type {
+            TestType::Unit => Self {
+                assertion_quality: 25,
+                error_coverage: 20,
+                boundary_conditions: 25,
+                test_isolation: 15,
+                input_variety: 15,
+            },
+            TestType::E2e => Self {
+                assertion_quality: 35,
+                error_coverage: 15,
+                boundary_conditions: 5,   // E2E tests don't need boundary testing
+                test_isolation: 25,
+                input_variety: 20,
+            },
+            TestType::Component => Self {
+                assertion_quality: 30,
+                error_coverage: 15,
+                boundary_conditions: 15,
+                test_isolation: 20,
+                input_variety: 20,
+            },
+            TestType::Integration => Self {
+                assertion_quality: 25,
+                error_coverage: 20,
+                boundary_conditions: 15,
+                test_isolation: 20,
+                input_variety: 20,
+            },
+        }
+    }
+    
+    /// Calculate total score with these weights
+    pub fn calculate_total(&self, breakdown: &ScoreBreakdown) -> u8 {
+        // Each category score is 0-25, we normalize by the weight
+        let weighted_sum = 
+            (breakdown.assertion_quality as u32 * self.assertion_quality as u32) +
+            (breakdown.error_coverage as u32 * self.error_coverage as u32) +
+            (breakdown.boundary_conditions as u32 * self.boundary_conditions as u32) +
+            (breakdown.test_isolation as u32 * self.test_isolation as u32) +
+            (breakdown.input_variety as u32 * self.input_variety as u32);
+        
+        // Normalize: max raw = 25 * 100 = 2500, we want 0-100
+        // weighted_sum / 25 = percentage score
+        ((weighted_sum / 25) as u8).min(100)
+    }
+}
+
 /// Statistics about a test file
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -282,6 +383,25 @@ pub struct TestStats {
     pub describe_blocks: usize,
     /// Number of async tests
     pub async_tests: usize,
+    /// Function coverage metrics (if source file available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function_coverage: Option<FunctionCoverage>,
+}
+
+/// Function coverage metrics - what percentage of source exports are tested
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FunctionCoverage {
+    /// Total number of exports in the source file
+    pub total_exports: usize,
+    /// Number of exports that appear to be tested
+    pub covered_exports: usize,
+    /// Coverage percentage (0-100)
+    pub coverage_percent: u8,
+    /// List of export names that are not referenced in tests
+    pub untested_exports: Vec<String>,
+    /// List of export names that are referenced in tests
+    pub tested_exports: Vec<String>,
 }
 
 /// A test case extracted from a test file
@@ -381,6 +501,18 @@ pub enum AssertionKind {
     CyShouldBeDisabled,
     /// cy.get().should('have.attr', k, v) - Cypress
     CyShouldHaveAttr,
+    /// cy.contains() - implicit assertion - Cypress (Moderate quality)
+    CyContains,
+    /// cy.url().should() - URL assertion - Cypress (Moderate quality)
+    CyUrl,
+    /// cy.intercept() - Network interception - Cypress (Moderate quality)
+    CyIntercept,
+    /// cy.get() without .should() - Weak implicit assertion (wait/existence)
+    CyGetImplicit,
+    /// cy.visit() - Navigation, weak implicit assertion
+    CyVisit,
+    /// cy.click(), cy.type(), etc. - Actions implying element exists
+    CyAction,
     /// assert.* style
     Assert,
     /// Negated assertion (expect(x).not.*)
@@ -433,7 +565,10 @@ impl AssertionKind {
             | AssertionKind::ToBeVisible
             | AssertionKind::CyShouldBeVisible
             | AssertionKind::CyShouldContain
-            | AssertionKind::CyShouldBeDisabled => AssertionQuality::Moderate,
+            | AssertionKind::CyShouldBeDisabled
+            | AssertionKind::CyContains
+            | AssertionKind::CyUrl
+            | AssertionKind::CyIntercept => AssertionQuality::Moderate,
 
             // Weak - snapshot assertions don't verify specific behavior
             AssertionKind::ToMatchSnapshot | AssertionKind::ToMatchInlineSnapshot => {
@@ -446,7 +581,10 @@ impl AssertionKind {
             | AssertionKind::ToBeNull
             | AssertionKind::ToBeTruthy
             | AssertionKind::ToBeFalsy
-            | AssertionKind::CyShouldExist => AssertionQuality::Weak,
+            | AssertionKind::CyShouldExist
+            | AssertionKind::CyGetImplicit
+            | AssertionKind::CyVisit
+            | AssertionKind::CyAction => AssertionQuality::Weak,
 
             // Negated assertions inherit quality but weaken it
             AssertionKind::Negated(inner) => match inner.quality() {

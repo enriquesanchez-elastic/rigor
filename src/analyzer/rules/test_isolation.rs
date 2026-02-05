@@ -217,15 +217,15 @@ impl AnalysisRule for TestIsolationRule {
             .filter(|i| i.rule == Rule::SharedState)
             .count();
 
-        // Deduct for shared state issues (-4 each, max -16)
-        score -= (shared_state_issues as i32 * 4).min(16);
+        // Deduct for shared state issues (-4 each, max -20)
+        score -= (shared_state_issues as i32 * 4).min(20);
 
-        // Deduct heavily for duplicate tests (-5 each)
+        // Deduct heavily for duplicate tests (-6 each, max -24)
         let duplicates = issues
             .iter()
             .filter(|i| i.rule == Rule::DuplicateTest)
             .count();
-        score -= (duplicates as i32 * 5).min(15);
+        score -= (duplicates as i32 * 6).min(24);
 
         score.clamp(0, 25) as u8
     }

@@ -151,6 +151,13 @@ impl InputVarietyRule {
 
         diversity.unique_string_count = unique_strings.len();
         diversity.unique_number_count = unique_numbers.len();
+        
+        // Collect actual values for better suggestions
+        diversity.collected_numbers = unique_numbers.iter().map(|s| s.to_string()).collect();
+        diversity.collected_strings = unique_strings.iter()
+            .take(5) // Limit to avoid huge lists
+            .map(|s| s.to_string())
+            .collect();
 
         diversity
     }
@@ -192,6 +199,89 @@ struct ValueDiversity {
     has_empty_object: bool,
     unique_string_count: usize,
     unique_number_count: usize,
+    /// Track the actual numeric values found (for better suggestions)
+    collected_numbers: Vec<String>,
+    /// Track the actual string values found (for better suggestions)
+    collected_strings: Vec<String>,
+}
+
+impl ValueDiversity {
+    /// Suggest missing edge cases based on collected values
+    fn suggest_missing_edge_cases(&self) -> String {
+        let mut suggestions = Vec::new();
+        
+        if self.has_numbers {
+            let nums_preview: Vec<&str> = self.collected_numbers.iter()
+                .take(5)
+                .map(|s| s.as_str())
+                .collect();
+            
+            let mut missing = Vec::new();
+            if !self.has_zero {
+                missing.push("0");
+            }
+            if !self.has_negative {
+                missing.push("-1");
+            }
+            
+            if !missing.is_empty() {
+                let collected = if nums_preview.is_empty() {
+                    String::new()
+                } else {
+                    format!("Uses: [{}]. ", nums_preview.join(", "))
+                };
+                suggestions.push(format!("{}Consider adding: {}", collected, missing.join(", ")));
+            }
+        }
+        
+        if self.has_strings && !self.has_empty_string {
+            let strs_preview: Vec<&str> = self.collected_strings.iter()
+                .take(3)
+                .map(|s| s.as_str())
+                .collect();
+            
+            if !strs_preview.is_empty() {
+                suggestions.push(format!("Uses strings like: [{}]. Consider adding: ''", strs_preview.join(", ")));
+            } else {
+                suggestions.push("Consider adding empty string ''".to_string());
+            }
+        }
+        
+        suggestions.join("; ")
+    }
+    
+    /// Format the collected values for display
+    fn format_collected_values(&self, kind: &str) -> String {
+        match kind {
+            "number" => {
+                let nums: Vec<&str> = self.collected_numbers.iter()
+                    .take(5)
+                    .map(|s| s.as_str())
+                    .collect();
+                if nums.is_empty() {
+                    String::new()
+                } else if nums.len() == 1 {
+                    format!(" (only uses: {})", nums[0])
+                } else {
+                    format!(" (uses: [{}])", nums.join(", "))
+                }
+            }
+            "string" => {
+                let strs: Vec<&str> = self.collected_strings.iter()
+                    .take(3)
+                    .map(|s| s.as_str())
+                    .collect();
+                if strs.is_empty() {
+                    String::new()
+                } else if strs.len() == 1 {
+                    format!(" (only uses: {})", strs[0])
+                } else {
+                    format!(" (uses: [{}])", strs.join(", "))
+                }
+            }
+            _ => String::new()
+        }
+    }
 }
 
 impl AnalysisRule for InputVarietyRule {
@@ -209,33 +299,36 @@ impl AnalysisRule for InputVarietyRule {
         let values = Self::extract_test_values(source, tree);
         let diversity = Self::analyze_value_diversity(&values);
 
-        // Check for limited variety
+        // Check for limited variety with specific value reporting
         if !diversity.has_zero && diversity.has_numbers {
+            let values_info = diversity.format_collected_values("number");
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Info,
-                message: "Tests use numbers but don't test with 0".to_string(),
+                message: format!("Tests use numbers but don't test with 0{}", values_info),
                 location: Location::new(1, 1),
-                suggestion: Some("Add test cases with value 0".to_string()),
+                suggestion: Some(format!("Add test cases with value 0. {}", diversity.suggest_missing_edge_cases())),
             });
         }
 
         if !diversity.has_negative && diversity.has_numbers && diversity.unique_number_count > 2 {
+            let values_info = diversity.format_collected_values("number");
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Info,
-                message: "Tests use numbers but don't test negative values".to_string(),
+                message: format!("Tests use numbers but don't test negative values{}", values_info),
                 location: Location::new(1, 1),
-                suggestion: Some("Add test cases with negative numbers".to_string()),
+                suggestion: Some("Add test cases with negative numbers like -1".to_string()),
             });
         }
 
         if !diversity.has_empty_string && diversity.has_strings && diversity.unique_string_count > 2
         {
+            let values_info = diversity.format_collected_values("string");
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Info,
-                message: "Tests use strings but don't test empty strings".to_string(),
+                message: format!("Tests use strings but don't test empty strings{}", values_info),
                 location: Location::new(1, 1),
                 suggestion: Some("Add test cases with empty string ''".to_string()),
             });
@@ -280,22 +373,44 @@ impl AnalysisRule for InputVarietyRule {
 
         // Check if tests only use a very limited set of values
         if diversity.unique_number_count == 1 && tests.len() > 3 {
+            let value = diversity.collected_numbers.first()
+                .map(|s| s.as_str())
+                .unwrap_or("?");
+            let mut missing = Vec::new();
+            if !diversity.has_zero && value != "0" {
+                missing.push("0");
+            }
+            if !diversity.has_negative {
+                missing.push("-1");
+            }
+            missing.push("larger values");
+            
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Warning,
-                message: "All tests use the same numeric value".to_string(),
+                message: format!("All tests use the same numeric value: {}", value),
                 location: Location::new(1, 1),
-                suggestion: Some("Vary test input values to cover more cases".to_string()),
+                suggestion: Some(format!("Vary test input values. Consider adding: {}", missing.join(", "))),
             });
         }
 
         if diversity.unique_string_count == 1 && diversity.has_strings && tests.len() > 3 {
+            let value = diversity.collected_strings.first()
+                .map(|s| {
+                    if s.len() > 20 {
+                        format!("{}...", &s[..17])
+                    } else {
+                        s.clone()
+                    }
+                })
+                .unwrap_or_else(|| "?".to_string());
+            
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Warning,
-                message: "All tests use the same string value".to_string(),
+                message: format!("All tests use the same string value: {}", value),
                 location: Location::new(1, 1),
-                suggestion: Some("Vary test input strings to cover more cases".to_string()),
+                suggestion: Some("Vary test input strings. Consider adding: '', special characters, long strings".to_string()),
             });
         }
 

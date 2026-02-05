@@ -1,0 +1,16 @@
+{
+  "threshold": 70,
+  "framework": "auto",
+  "rules": {
+    "weak-assertion": "warning",
+    "missing-error-test": "warning",
+    "flaky-pattern": "warning",
+    "snapshot-overuse": "warning"
+  },
+  "ignore": ["**/node_modules/**", "**/dist/**"],
+  "sourceMapping": {
+    "mode": "auto",
+    "sourceRoot": "src",
+    "testRoot": "tests"
+  }
+}

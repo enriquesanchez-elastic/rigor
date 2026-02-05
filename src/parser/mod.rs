@@ -6,6 +6,9 @@ pub mod test_file;
 pub mod typescript;
 
 pub use ignore_directives::IgnoreDirectives;
-pub use source_file::SourceFileParser;
+pub use source_file::{
+    BoundaryCondition, ExportedItem, ExportKind, FunctionDetails, Mutation, MutationKind,
+    Parameter, ReturnStatement, SourceFileParser, ThrowableFunction, ValueShape,
+};
 pub use test_file::TestFileParser;
 pub use typescript::TypeScriptParser;

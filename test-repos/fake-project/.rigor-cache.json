@@ -1,0 +1,2119 @@
+{
+  "version": 1,
+  "entries": {
+    "./tests/auth.test.ts": {
+      "content_hash": "71f297bb66fc4999bd6348a091c3485d48b3f728244d03546ff6f1ea6dbc6212",
+      "source_hash": null,
+      "result": {
+        "filePath": "./tests/auth.test.ts",
+        "score": {
+          "value": 95,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 25,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 17
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should return user object with correct email on successful login': expect(result.user).toBeDefined()",
+            "location": {
+              "line": 8,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(expectedValue) or expect(result).toEqual({ id: 1, name: '...' })"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test with 0 (uses: [64, 19, 17, 18])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with value 0. Uses: [64, 19, 17, 18]. Consider adding: 0, -1"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [64, 19, 17, 18])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 5,
+              "column": 33,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 9,
+              "column": 37,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 15,
+              "column": 31,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 16,
+              "column": 31,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 25,
+              "column": 31,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 26,
+              "column": 31,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "assertion-intent-mismatch",
+            "severity": "warning",
+            "message": "Test 'should throw AuthError for empty email' suggests empty/zero result but no length or empty assertion found — test may not verify what it claims",
+            "location": {
+              "line": 19,
+              "column": 3,
+              "endLine": 22,
+              "endColumn": 5
+            },
+            "suggestion": "Add expect(result).toHaveLength(0) or expect(result).toEqual([]) so the test verifies emptiness."
+          }
+        ],
+        "stats": {
+          "totalTests": 8,
+          "skippedTests": 0,
+          "totalAssertions": 17,
+          "describeBlocks": 3,
+          "asyncTests": 0
+        },
+        "framework": "jest",
+        "testType": "unit",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    },
+    "./src/components/Button.test.tsx": {
+      "content_hash": "71d54a2b1382b9e2df61b9b796f64c0772c55648852fb1f565847d9b12a18618",
+      "source_hash": null,
+      "result": {
+        "filePath": "./src/components/Button.test.tsx",
+        "score": {
+          "value": 91,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 23,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 17
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'disabled button does not call onClick': expect(handleClick).not.toHaveBeenCalled()",
+            "location": {
+              "line": 26,
+              "column": 3,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test with 0 (only uses: 1)",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with value 0. Uses: [1]. Consider adding: 0, -1; Uses strings like: [\"Click\", '@testing-library/react', 'calls onClick when clicked']. Consider adding: ''"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: [\"Click\", '@testing-library/react', 'calls onClick when clicked'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "rtl-prefer-screen",
+            "severity": "warning",
+            "message": "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility",
+            "location": {
+              "line": 9,
+              "column": 28,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead"
+          },
+          {
+            "rule": "rtl-prefer-user-event",
+            "severity": "info",
+            "message": "Prefer userEvent over fireEvent for more realistic user interactions",
+            "location": {
+              "line": 10,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 17,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 25,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-user-event",
+            "severity": "info",
+            "message": "Prefer userEvent over fireEvent for more realistic user interactions",
+            "location": {
+              "line": 25,
+              "column": 3,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Source export 'ButtonVariant' is not referenced in tests",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding tests for 'ButtonVariant'"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Source export 'ButtonProps' is not referenced in tests",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding tests for 'ButtonProps'"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 4,
+          "describeBlocks": 0,
+          "asyncTests": 0,
+          "functionCoverage": {
+            "totalExports": 3,
+            "coveredExports": 1,
+            "coveragePercent": 33,
+            "untestedExports": [
+              "ButtonVariant",
+              "ButtonProps"
+            ],
+            "testedExports": [
+              "Button"
+            ]
+          }
+        },
+        "framework": "jest",
+        "testType": "component",
+        "sourceFile": "./src/components/Button.tsx"
+      },
+      "cached_at": 1770283749
+    },
+    "./tests/cart.test.ts": {
+      "content_hash": "cfe78e51edc3a86ff87c1abc6ed6770a68276142f926aa1e29c4cc2296fa5848",
+      "source_hash": null,
+      "result": {
+        "filePath": "./tests/cart.test.ts",
+        "score": {
+          "value": 89,
+          "grade": "B"
+        },
+        "breakdown": {
+          "assertionQuality": 19,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 21,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should add items': expect(result).toBeDefined()",
+            "location": {
+              "line": 13,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(expectedValue) or expect(result).toEqual({ id: 1, name: '...' })"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should add items': expect(result).toBeTruthy()",
+            "location": {
+              "line": 14,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(true) or expect(result.success).toBe(true)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should work when removing': expect(cart).toBeDefined()",
+            "location": {
+              "line": 26,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(expectedValue) or expect(result).toEqual({ id: 1, name: '...' })"
+          },
+          {
+            "rule": "shared-state",
+            "severity": "warning",
+            "message": "Mutable module-level variable without beforeEach reset: Mutable module-level variable",
+            "location": {
+              "line": 3,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add beforeEach hook to reset shared state, or use const instead"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [2, 3, 0, 1, 10])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['../src/cart/cart', 'Gadget', '2'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 5,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "jest",
+        "testType": "unit",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    },
+    "./src/__tests__/validators.test.ts": {
+      "content_hash": "4630fb0d5d8853f2727cdb0dcb38ff014319113190d4bb2b5c83dd3e1d0492c3",
+      "source_hash": null,
+      "result": {
+        "filePath": "./src/__tests__/validators.test.ts",
+        "score": {
+          "value": 78,
+          "grade": "C"
+        },
+        "breakdown": {
+          "assertionQuality": 6,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('user@example.com')).toMatc...",
+            "location": {
+              "line": 5,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('invalid')).toMatchSnapshot()",
+            "location": {
+              "line": 6,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('')).toMatchSnapshot()",
+            "location": {
+              "line": 7,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'isValidEmail' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 4,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'parsePrice': expect(parsePrice('42.5')).toMatchSnapshot()",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'parsePrice': expect(parsePrice('0')).toMatchSnapshot()",
+            "location": {
+              "line": 12,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'parsePrice' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 10,
+              "column": 3,
+              "endLine": 13,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(5, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 16,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(-1, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 17,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(15, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 18,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'clamp' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 15,
+              "column": 3,
+              "endLine": 19,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Over half of assertions (8/8) are snapshots - consider more specific assertions",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Prefer toBe(), toEqual(), or toHaveLength() for critical behavior; use snapshots sparingly"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [10, 1, 0, 5, 15])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 5,
+              "column": 25,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'isValidEmail' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 4,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 8,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "jest",
+        "testType": "unit",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    },
+    "e2e/weak-cypress.cy.ts": {
+      "content_hash": "1bad635c56ca0462a8d1246c5e1a720a613f7eb22c4883d0d9c8b1939c207ddf",
+      "source_hash": null,
+      "result": {
+        "filePath": "e2e/weak-cypress.cy.ts",
+        "score": {
+          "value": 87,
+          "grade": "B"
+        },
+        "breakdown": {
+          "assertionQuality": 19,
+          "errorCoverage": 25,
+          "boundaryConditions": 20,
+          "testIsolation": 25,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'element exists': cy.get('.header').should('exist')",
+            "location": {
+              "line": 7,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'just get no should': cy.get('[data-cy=\"main\"]')",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should exist again': cy.get('body').should('exist')",
+            "location": {
+              "line": 15,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "missing-boundary-test",
+            "severity": "info",
+            "message": "Tests may not cover edge cases like 0, empty values, or boundaries",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add tests: expect(fn(0)).toBe(...); expect(fn('')).toBe(...); expect(fn(null)).toThrow()"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['body', 'visible but weak', 'element exists'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests don't include null value testing",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding test cases with null values"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'element exists' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 6,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'visible but weak' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 18,
+              "column": 3,
+              "endLine": 20,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          }
+        ],
+        "stats": {
+          "totalTests": 4,
+          "skippedTests": 0,
+          "totalAssertions": 4,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "cypress",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770284053
+    },
+    "src/__tests__/validators.test.ts": {
+      "content_hash": "4630fb0d5d8853f2727cdb0dcb38ff014319113190d4bb2b5c83dd3e1d0492c3",
+      "source_hash": null,
+      "result": {
+        "filePath": "src/__tests__/validators.test.ts",
+        "score": {
+          "value": 78,
+          "grade": "C"
+        },
+        "breakdown": {
+          "assertionQuality": 6,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('user@example.com')).toMatc...",
+            "location": {
+              "line": 5,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('invalid')).toMatchSnapshot()",
+            "location": {
+              "line": 6,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'isValidEmail': expect(isValidEmail('')).toMatchSnapshot()",
+            "location": {
+              "line": 7,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'isValidEmail' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 4,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'parsePrice': expect(parsePrice('42.5')).toMatchSnapshot()",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'parsePrice': expect(parsePrice('0')).toMatchSnapshot()",
+            "location": {
+              "line": 12,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'parsePrice' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 10,
+              "column": 3,
+              "endLine": 13,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(5, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 16,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(-1, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 17,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'clamp': expect(clamp(15, 0, 10)).toMatchSnapshot()",
+            "location": {
+              "line": 18,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Test 'clamp' uses only snapshot assertions - add specific value checks",
+            "location": {
+              "line": 15,
+              "column": 3,
+              "endLine": 19,
+              "endColumn": 5
+            },
+            "suggestion": "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')"
+          },
+          {
+            "rule": "snapshot-overuse",
+            "severity": "warning",
+            "message": "Over half of assertions (8/8) are snapshots - consider more specific assertions",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Prefer toBe(), toEqual(), or toHaveLength() for critical behavior; use snapshots sparingly"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [15, 1, 5, 0, 10])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 5,
+              "column": 25,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'isValidEmail' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 4,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 8,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "jest",
+        "testType": "unit",
+        "sourceFile": null
+      },
+      "cached_at": 1770284053
+    },
+    "e2e/checkout.cy.ts": {
+      "content_hash": "4a29efab81fba724a495453e74122ddc410db1b0cb1f5ae10a103c5b23ae9116",
+      "source_hash": null,
+      "result": {
+        "filePath": "e2e/checkout.cy.ts",
+        "score": {
+          "value": 86,
+          "grade": "B"
+        },
+        "breakdown": {
+          "assertionQuality": 17,
+          "errorCoverage": 25,
+          "boundaryConditions": 20,
+          "testIsolation": 25,
+          "inputVariety": 23
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'shows cart items': cy.get('[data-cy=\"cart-item\"]').should('exist')",
+            "location": {
+              "line": 7,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('button').contains('Checkout').click()",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('button')",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('.checkout-form').should('exist')",
+            "location": {
+              "line": 13,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "missing-boundary-test",
+            "severity": "info",
+            "message": "Tests may not cover edge cases like 0, empty values, or boundaries",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add tests: expect(fn(0)).toBe(...); expect(fn('')).toBe(...); expect(fn(null)).toThrow()"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['[data-cy=\"cart-item\"]', 'Checkout', 'exist'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'shows cart items' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 6,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'proceeds to checkout' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 10,
+              "column": 3,
+              "endLine": 14,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 9,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "cypress",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770284052
+    },
+    "src/components/Button.bad.test.tsx": {
+      "content_hash": "28c45f336faff4e958fc833282a077199b030e277d557eaccfa788afd8e04dd6",
+      "source_hash": null,
+      "result": {
+        "filePath": "src/components/Button.bad.test.tsx",
+        "score": {
+          "value": 94,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 23,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'querySelector by class': expect(el).toBeTruthy()",
+            "location": {
+              "line": 28,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(true) or expect(result.success).toBe(true)"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['getByTestId as primary query', 'Click', \"primary\"])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests don't include null value testing",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding test cases with null values"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'querySelector by class' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 25,
+              "column": 3,
+              "endLine": 29,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "rtl-prefer-screen",
+            "severity": "warning",
+            "message": "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility",
+            "location": {
+              "line": 8,
+              "column": 27,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 14,
+              "column": 17,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 21,
+              "column": 21,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-user-event",
+            "severity": "info",
+            "message": "Prefer userEvent over fireEvent for more realistic user interactions",
+            "location": {
+              "line": 21,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)"
+          },
+          {
+            "rule": "rtl-prefer-screen",
+            "severity": "warning",
+            "message": "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility",
+            "location": {
+              "line": 27,
+              "column": 26,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 33,
+              "column": 20,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          }
+        ],
+        "stats": {
+          "totalTests": 5,
+          "skippedTests": 0,
+          "totalAssertions": 5,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "jest",
+        "testType": "component",
+        "sourceFile": null
+      },
+      "cached_at": 1770284053
+    },
+    "./e2e/login.e2e.test.ts": {
+      "content_hash": "633da2a47eaf8a3843bf70f0cbd93a3b0061dd435bf3b75c7239831cccfb4a43",
+      "source_hash": null,
+      "result": {
+        "filePath": "./e2e/login.e2e.test.ts",
+        "score": {
+          "value": 92,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 25,
+          "errorCoverage": 21,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 19
+        },
+        "issues": [
+          {
+            "rule": "missing-error-test",
+            "severity": "warning",
+            "message": "Test 'shows error for invalid credentials' appears to test error handling but has no toThrow/rejects assertion",
+            "location": {
+              "line": 13,
+              "column": 1,
+              "endLine": 21,
+              "endColumn": 3
+            },
+            "suggestion": "Sync: expect(() => fn(bad)).toThrow(ErrorType); Async: await expect(fn()).rejects.toThrow('message')"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['input[name=\"password\"]', '/dashboard', '/login'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 5,
+              "column": 42,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 15,
+              "column": 42,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 19,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 23,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 25,
+              "column": 17,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 27,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "boundary-specificity",
+            "severity": "info",
+            "message": "Test 'flaky: uses Date.now() for timing' mentions boundary/edge but doesn't assert exact value",
+            "location": {
+              "line": 23,
+              "column": 1,
+              "endLine": 29,
+              "endColumn": 3
+            },
+            "suggestion": "Assert exact boundary: e.g. expect(fn(17)).toBe(false); expect(fn(18)).toBe(true)"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 4,
+          "describeBlocks": 0,
+          "asyncTests": 3
+        },
+        "framework": "playwright",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    },
+    "src/components/Button.test.tsx": {
+      "content_hash": "71d54a2b1382b9e2df61b9b796f64c0772c55648852fb1f565847d9b12a18618",
+      "source_hash": null,
+      "result": {
+        "filePath": "src/components/Button.test.tsx",
+        "score": {
+          "value": 91,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 23,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 17
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'disabled button does not call onClick': expect(handleClick).not.toHaveBeenCalled()",
+            "location": {
+              "line": 26,
+              "column": 3,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test with 0 (only uses: 1)",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with value 0. Uses: [1]. Consider adding: 0, -1; Uses strings like: ['renders with getByTestId', 'Submit', \"Click me\"]. Consider adding: ''"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['renders with getByTestId', 'Submit', \"Click me\"])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "rtl-prefer-screen",
+            "severity": "warning",
+            "message": "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility",
+            "location": {
+              "line": 9,
+              "column": 28,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead"
+          },
+          {
+            "rule": "rtl-prefer-user-event",
+            "severity": "info",
+            "message": "Prefer userEvent over fireEvent for more realistic user interactions",
+            "location": {
+              "line": 10,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 17,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-semantic",
+            "severity": "info",
+            "message": "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior",
+            "location": {
+              "line": 25,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible"
+          },
+          {
+            "rule": "rtl-prefer-user-event",
+            "severity": "info",
+            "message": "Prefer userEvent over fireEvent for more realistic user interactions",
+            "location": {
+              "line": 25,
+              "column": 3,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Source export 'ButtonVariant' is not referenced in tests",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding tests for 'ButtonVariant'"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Source export 'ButtonProps' is not referenced in tests",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding tests for 'ButtonProps'"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 4,
+          "describeBlocks": 0,
+          "asyncTests": 0,
+          "functionCoverage": {
+            "totalExports": 3,
+            "coveredExports": 1,
+            "coveragePercent": 33,
+            "untestedExports": [
+              "ButtonVariant",
+              "ButtonProps"
+            ],
+            "testedExports": [
+              "Button"
+            ]
+          }
+        },
+        "framework": "jest",
+        "testType": "component",
+        "sourceFile": "src/components/Button.tsx"
+      },
+      "cached_at": 1770284053
+    },
+    "e2e/flaky-playwright.e2e.test.ts": {
+      "content_hash": "1fc43e7999fd778085c79a09712a6d5c7bb122b297fa0193e85bc9304f53165d",
+      "source_hash": null,
+      "result": {
+        "filePath": "e2e/flaky-playwright.e2e.test.ts",
+        "score": {
+          "value": 96,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 25,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 21
+        },
+        "issues": [
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [0, 1, 100])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['uses Date.now for timing', '@playwright/test', 'button'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 4,
+              "column": 14,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 7,
+              "column": 10,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Math.random() is non-deterministic - mock it for reproducible tests",
+            "location": {
+              "line": 12,
+              "column": 16,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'uses Math.random' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 10,
+              "column": 1,
+              "endLine": 14,
+              "endColumn": 3
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'setTimeout in test' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 16,
+              "column": 1,
+              "endLine": 23,
+              "endColumn": 3
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "boundary-specificity",
+            "severity": "info",
+            "message": "Test 'uses Date.now for timing' mentions boundary/edge but doesn't assert exact value",
+            "location": {
+              "line": 3,
+              "column": 1,
+              "endLine": 8,
+              "endColumn": 3
+            },
+            "suggestion": "Assert exact boundary: e.g. expect(fn(17)).toBe(false); expect(fn(18)).toBe(true)"
+          },
+          {
+            "rule": "state-verification",
+            "severity": "info",
+            "message": "Test 'setTimeout in test' may have side effects but only checks return value",
+            "location": {
+              "line": 16,
+              "column": 1,
+              "endLine": 23,
+              "endColumn": 3
+            },
+            "suggestion": "Verify state or mocks: expect(mockFn).toHaveBeenCalledWith(expected); or expect(state).toEqual(expected)"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 3,
+          "describeBlocks": 0,
+          "asyncTests": 3
+        },
+        "framework": "playwright",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770284052
+    },
+    "e2e/login.e2e.test.ts": {
+      "content_hash": "633da2a47eaf8a3843bf70f0cbd93a3b0061dd435bf3b75c7239831cccfb4a43",
+      "source_hash": null,
+      "result": {
+        "filePath": "e2e/login.e2e.test.ts",
+        "score": {
+          "value": 92,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 25,
+          "errorCoverage": 21,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 19
+        },
+        "issues": [
+          {
+            "rule": "missing-error-test",
+            "severity": "warning",
+            "message": "Test 'shows error for invalid credentials' appears to test error handling but has no toThrow/rejects assertion",
+            "location": {
+              "line": 13,
+              "column": 1,
+              "endLine": 21,
+              "endColumn": 3
+            },
+            "suggestion": "Sync: expect(() => fn(bad)).toThrow(ErrorType); Async: await expect(fn()).rejects.toThrow('message')"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['@playwright/test', 'input[name=\"password\"]', '/dashboard'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 5,
+              "column": 42,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "hardcoded-values",
+            "severity": "info",
+            "message": "Hardcoded email-like value: 'user@example.com'",
+            "location": {
+              "line": 15,
+              "column": 42,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider using test fixtures or faker library for test data"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 19,
+              "column": 15,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 23,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 25,
+              "column": 17,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it",
+            "location": {
+              "line": 27,
+              "column": 19,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+          },
+          {
+            "rule": "boundary-specificity",
+            "severity": "info",
+            "message": "Test 'flaky: uses Date.now() for timing' mentions boundary/edge but doesn't assert exact value",
+            "location": {
+              "line": 23,
+              "column": 1,
+              "endLine": 29,
+              "endColumn": 3
+            },
+            "suggestion": "Assert exact boundary: e.g. expect(fn(17)).toBe(false); expect(fn(18)).toBe(true)"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 4,
+          "describeBlocks": 0,
+          "asyncTests": 3
+        },
+        "framework": "playwright",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770284053
+    },
+    "./e2e/checkout.cy.ts": {
+      "content_hash": "4a29efab81fba724a495453e74122ddc410db1b0cb1f5ae10a103c5b23ae9116",
+      "source_hash": null,
+      "result": {
+        "filePath": "./e2e/checkout.cy.ts",
+        "score": {
+          "value": 86,
+          "grade": "B"
+        },
+        "breakdown": {
+          "assertionQuality": 17,
+          "errorCoverage": 25,
+          "boundaryConditions": 20,
+          "testIsolation": 25,
+          "inputVariety": 23
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'shows cart items': cy.get('[data-cy=\"cart-item\"]').should('exist')",
+            "location": {
+              "line": 7,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('button').contains('Checkout').click()",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('button')",
+            "location": {
+              "line": 11,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'proceeds to checkout': cy.get('.checkout-form').should('exist')",
+            "location": {
+              "line": 13,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(actual).toBe(expected) or expect(actual).toEqual(expected)"
+          },
+          {
+            "rule": "missing-boundary-test",
+            "severity": "info",
+            "message": "Tests may not cover edge cases like 0, empty values, or boundaries",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add tests: expect(fn(0)).toBe(...); expect(fn('')).toBe(...); expect(fn(null)).toThrow()"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['[data-cy=\"cart-item\"]', '/checkout', 'displays total'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'shows cart items' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 6,
+              "column": 3,
+              "endLine": 8,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'proceeds to checkout' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 10,
+              "column": 3,
+              "endLine": 14,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          }
+        ],
+        "stats": {
+          "totalTests": 3,
+          "skippedTests": 0,
+          "totalAssertions": 9,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "cypress",
+        "testType": "e2e",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    },
+    "./vitest/math.test.ts": {
+      "content_hash": "11f25f1d174cdf95af588985731ff6c8ff3ea4bd412095cd75890e5390c9c1f6",
+      "source_hash": null,
+      "result": {
+        "filePath": "./vitest/math.test.ts",
+        "score": {
+          "value": 96,
+          "grade": "A"
+        },
+        "breakdown": {
+          "assertionQuality": 25,
+          "errorCoverage": 25,
+          "boundaryConditions": 25,
+          "testIsolation": 25,
+          "inputVariety": 19
+        },
+        "issues": [
+          {
+            "rule": "weak-assertion",
+            "severity": "warning",
+            "message": "Weak assertion in test 'should work': expect(result).toBeDefined()",
+            "location": {
+              "line": 19,
+              "column": 5,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Replace with: expect(result).toBe(expectedValue) or expect(result).toEqual({ id: 1, name: '...' })"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use numbers but don't test negative values (uses: [3, 5, 0.5, 1, 0])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with negative numbers like -1"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests use strings but don't test empty strings (uses: ['result', 'math', 'should work'])",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Add test cases with empty string ''"
+          },
+          {
+            "rule": "limited-input-variety",
+            "severity": "info",
+            "message": "Tests don't include null value testing",
+            "location": {
+              "line": 1,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Consider adding test cases with null values"
+          },
+          {
+            "rule": "focused-test",
+            "severity": "warning",
+            "message": "Focused test (.only) - will skip other tests when run",
+            "location": {
+              "line": 22,
+              "column": 1,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Remove .only to run the full test suite"
+          },
+          {
+            "rule": "flaky-pattern",
+            "severity": "warning",
+            "message": "Math.random() is non-deterministic - mock it for reproducible tests",
+            "location": {
+              "line": 8,
+              "column": 10,
+              "endLine": null,
+              "endColumn": null
+            },
+            "suggestion": "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "warning",
+            "message": "Vague test name: 'test 1' - describe expected behavior",
+            "location": {
+              "line": 12,
+              "column": 3,
+              "endLine": 14,
+              "endColumn": 5
+            },
+            "suggestion": "Use a name that describes the scenario and expected outcome, e.g. 'returns 404 when user not found'"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "warning",
+            "message": "Vague test name: 'should work' - describe expected behavior",
+            "location": {
+              "line": 16,
+              "column": 3,
+              "endLine": 20,
+              "endColumn": 5
+            },
+            "suggestion": "Use a name that describes the scenario and expected outcome, e.g. 'returns 404 when user not found'"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'adds numbers' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 22,
+              "column": 3,
+              "endLine": 24,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "vague-test-name",
+            "severity": "info",
+            "message": "Test name 'uses random' may lack a clear verb - consider 'should ...' or 'returns ...'",
+            "location": {
+              "line": 26,
+              "column": 3,
+              "endLine": 30,
+              "endColumn": 5
+            },
+            "suggestion": "Start with should/returns/throws to describe behavior"
+          },
+          {
+            "rule": "state-verification",
+            "severity": "info",
+            "message": "Test 'adds numbers' may have side effects but only checks return value",
+            "location": {
+              "line": 22,
+              "column": 3,
+              "endLine": 24,
+              "endColumn": 5
+            },
+            "suggestion": "Verify state or mocks: expect(mockFn).toHaveBeenCalledWith(expected); or expect(state).toEqual(expected)"
+          }
+        ],
+        "stats": {
+          "totalTests": 4,
+          "skippedTests": 0,
+          "totalAssertions": 5,
+          "describeBlocks": 1,
+          "asyncTests": 0
+        },
+        "framework": "vitest",
+        "testType": "unit",
+        "sourceFile": null
+      },
+      "cached_at": 1770283749
+    }
+  }
+}

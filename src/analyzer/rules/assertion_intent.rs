@@ -82,15 +82,30 @@ impl AssertionIntentRule {
         })
     }
 
-    /// Assertions check for empty (length 0, toHaveLength(0), empty array).
+    /// Assertions check for empty (length 0, toHaveLength(0), empty array, etc.).
     fn has_empty_assertion(assertions: &[crate::Assertion]) -> bool {
         assertions.iter().any(|a| {
             let r = a.raw.to_lowercase();
+            // Jest/Vitest patterns
             r.contains("tohavelength(0)")
                 || r.contains("to have length 0")
                 || (r.contains("length") && r.contains("0"))
-                || r.contains("empty")
                 || r.contains("toequal([])")
+                || r.contains("tostrictequal([])")
+                || r.contains("toequal({})")
+                || r.contains("tostrictequal({})")
+                || r.contains(".length).tobe(0)")
+                || r.contains(".length).toequal(0)")
+                // jest-extended patterns
+                || r.contains("tobeempty()")
+                || r.contains("tobearrayofsize(0)")
+                // Cypress patterns
+                || r.contains("should('have.length', 0)")
+                || r.contains("should(\"have.length\", 0)")
+                || r.contains("should('be.empty')")
+                || r.contains("should(\"be.empty\")")
+                // Generic patterns
+                || r.contains("empty")
         })
     }
 

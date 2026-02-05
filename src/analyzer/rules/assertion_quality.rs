@@ -161,18 +161,25 @@ impl AnalysisRule for AssertionQualityRule {
             .filter(|i| i.rule == Rule::NoAssertions)
             .count();
 
-        // Deduct points for weak assertions (-2 each, max -10)
-        score -= (weak_assertions as i32 * 2).min(10);
+        // Deduct points for weak assertions (-2 each, max -18 so many weak assertions hurt)
+        score -= (weak_assertions as i32 * 2).min(18);
 
-        // Deduct heavily for tests without assertions (-5 each, max -15)
-        score -= (no_assertions as i32 * 5).min(15);
+        // Deduct heavily for tests without assertions (-6 each, max -24)
+        score -= (no_assertions as i32 * 6).min(24);
 
-        // Snapshot overuse
+        // Snapshot overuse (-3 each, max -12)
         let snapshot_overuse = issues
             .iter()
             .filter(|i| i.rule == Rule::SnapshotOveruse)
             .count();
-        score -= (snapshot_overuse as i32 * 3).min(9);
+        score -= (snapshot_overuse as i32 * 3).min(12);
+
+        // Trivial assertions (test only has expect(1).toBe(1) etc.) — deduct in category too
+        let trivial = issues
+            .iter()
+            .filter(|i| i.rule == Rule::TrivialAssertion)
+            .count();
+        score -= (trivial as i32 * 3).min(12);
 
         // Calculate strong assertion ratio bonus
         let total_assertions: usize = tests.iter().map(|t| t.assertions.len()).sum();

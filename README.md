@@ -541,6 +541,82 @@ When mutants **survive** (tests still pass after mutating the source), that mean
 | **D** | 60-69 | Poor - Tests have significant quality issues |
 | **F** | 0-59 | Failing - Tests need major improvements |
 
+### Formal Scoring Formula
+
+The final score \( S \) is computed as:
+
+\[
+S = \max\left(0,\; S_{\text{weighted}} - P\right)
+\]
+
+Where:
+
+**1. Weighted Category Score** \( S_{\text{weighted}} \)
+
+\[
+S_{\text{weighted}} = \frac{1}{25} \sum_{i=1}^{5} C_i \cdot W_i
+\]
+
+- \( C_i \) = Category score (0–25) for category \( i \)
+- \( W_i \) = Weight for category \( i \) based on test type (see table below)
+
+**2. Issue Penalty** \( P \)
+
+\[
+P = \min(E \cdot 5,\, 35) + \min(W \cdot 2,\, 40) + \min(I \cdot 1,\, 15)
+\]
+
+- \( E \) = Number of Error-severity issues
+- \( W \) = Number of Warning-severity issues
+- \( I \) = Number of Info-severity issues
+
+The penalty is capped to prevent extreme deductions: max 35 from errors, 40 from warnings, 15 from info (90 total max penalty).
+
+**3. Category Weights by Test Type**
+
+| Category | Unit | E2E | Component | Integration |
+|----------|------|-----|-----------|-------------|
+| Assertion Quality | 25 | 35 | 30 | 25 |
+| Error Coverage | 20 | 15 | 15 | 20 |
+| Boundary Conditions | 25 | 5 | 15 | 15 |
+| Test Isolation | 15 | 25 | 20 | 20 |
+| Input Variety | 15 | 20 | 20 | 20 |
+| **Total** | 100 | 100 | 100 | 100 |
+
+Weights are tuned per test type: E2E tests de-emphasize boundary conditions (which are less relevant to user-flow tests) and emphasize assertion quality and isolation; unit tests balance boundary conditions and assertions equally.
+
+**4. Worked Example**
+
+A **unit test** file with these category scores and issues:
+
+| Category | Score |
+|----------|-------|
+| Assertion Quality | 20 |
+| Error Coverage | 18 |
+| Boundary Conditions | 15 |
+| Test Isolation | 22 |
+| Input Variety | 17 |
+
+Issues: 0 errors, 3 warnings, 2 info
+
+**Step 1: Weighted score** (using unit test weights)
+
+\[
+S_{\text{weighted}} = \frac{(20 \times 25) + (18 \times 20) + (15 \times 25) + (22 \times 15) + (17 \times 15)}{25} = \frac{500 + 360 + 375 + 330 + 255}{25} = \frac{1820}{25} = 72.8
+\]
+
+**Step 2: Issue penalty**
+
+\[
+P = \min(0 \times 5, 35) + \min(3 \times 2, 40) + \min(2 \times 1, 15) = 0 + 6 + 2 = 8
+\]
+
+**Step 3: Final score**
+
+\[
+S = \max(0, 72.8 - 8) = 64.8 \approx 65 \quad \Rightarrow \quad \text{Grade: } \mathbf{D}
+\]
+
 ### Category Breakdown
 
 Each category contributes up to 25 points:

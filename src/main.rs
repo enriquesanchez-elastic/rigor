@@ -99,6 +99,10 @@ struct Args {
     /// Number of parallel threads (default: number of CPU cores)
     #[arg(long, value_name = "N")]
     jobs: Option<usize>,
+    
+    /// Path to coverage JSON file (Istanbul/c8/nyc format)
+    #[arg(long, value_name = "PATH")]
+    coverage: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -264,6 +268,29 @@ fn run() -> Result<ExitCode> {
 
     // Calculate aggregate stats
     let stats = AnalysisEngine::aggregate_stats(&results);
+    
+    // Load coverage data if provided (available for future enhancements)
+    let _coverage_report = if let Some(ref coverage_path) = args.coverage {
+        match rigor::coverage::load_coverage(coverage_path) {
+            Ok(report) => {
+                if !args.quiet {
+                    eprintln!(
+                        "{}: Loaded coverage data ({} files, {:.1}% line coverage)",
+                        "Coverage".cyan().bold(),
+                        report.files.len(),
+                        report.summary.lines_pct
+                    );
+                }
+                Some(report)
+            }
+            Err(e) => {
+                eprintln!("{}: Failed to load coverage: {}", "Warning".yellow(), e);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // Output results
     if args.sarif {
@@ -320,34 +347,58 @@ fn run() -> Result<ExitCode> {
         }
     }
 
-    // Run mutation testing if requested (single file with source only)
+    // Run mutation testing if requested
     if let Some(mutate_arg) = args.mutate {
-        if results.len() == 1 {
-            let result = &results[0];
-            if let Some(ref source_path) = result.source_file {
-                if source_path.exists() {
-                    let count = match mutate_arg.as_deref().unwrap_or("quick") {
-                        "full" => usize::MAX,
-                        "medium" => 30,
-                        _ => 10,
-                    };
-                    let test_cmd = std::env::var("RIGOR_TEST_CMD").unwrap_or_else(|_| "npm test".to_string());
-                    if let Ok(content) = std::fs::read_to_string(source_path) {
-                        if let Ok(mutation_result) =
-                            mutation::run_mutation_test(source_path, &content, &test_cmd, count)
-                        {
-                            report_mutation_result(&mutation_result);
-                        }
-                    }
-                }
-            } else if !args.quiet && !is_likely_e2e_test(result.file_path.as_path()) {
+        let count = match mutate_arg.as_deref().unwrap_or("quick") {
+            "full" => usize::MAX,
+            "medium" => 30,
+            _ => 10,
+        };
+        let test_cmd = std::env::var("RIGOR_TEST_CMD").unwrap_or_else(|_| "npm test".to_string());
+        
+        // Collect all source files from analysis results
+        let source_paths: Vec<PathBuf> = results
+            .iter()
+            .filter_map(|r| r.source_file.clone())
+            .filter(|p| p.exists())
+            .collect();
+        
+        if source_paths.is_empty() {
+            if !args.quiet && results.iter().any(|r| !is_likely_e2e_test(r.file_path.as_path())) {
                 eprintln!(
-                    "{}: --mutate requires a source file (test file must map to a .ts source, e.g. foo.test.ts → foo.ts). Cypress/e2e tests often have no single source.",
+                    "{}: --mutate requires source files (test files must map to .ts sources, e.g. foo.test.ts → foo.ts). Cypress/e2e tests often have no single source.",
                     "Warning".yellow()
                 );
             }
-        } else if !args.quiet {
-            eprintln!("{}: --mutate only works with a single test file", "Warning".yellow());
+        } else if source_paths.len() == 1 {
+            // Single file mutation testing
+            let source_path = &source_paths[0];
+            if let Ok(content) = std::fs::read_to_string(source_path) {
+                if let Ok(mutation_result) =
+                    mutation::run_mutation_test(source_path, &content, &test_cmd, count)
+                {
+                    report_mutation_result(&mutation_result);
+                }
+            }
+        } else {
+            // Multi-file batch mutation testing
+            if !args.quiet {
+                eprintln!(
+                    "{}: Running mutation testing on {} source files...",
+                    "Mutation".cyan().bold(),
+                    source_paths.len()
+                );
+            }
+            
+            let use_parallel = args.parallel || source_paths.len() > 3;
+            if let Ok(batch_result) = mutation::run_batch_mutation_test(
+                &source_paths,
+                &test_cmd,
+                count,
+                use_parallel,
+            ) {
+                mutation::report_batch_mutation_result(&batch_result);
+            }
         }
     }
 

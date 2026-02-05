@@ -87,7 +87,7 @@ struct JsonSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Score, ScoreBreakdown, TestFramework, TestStats};
+    use crate::{Score, ScoreBreakdown, TestFramework, TestStats, TestType};
     use std::path::PathBuf;
 
     #[test]
@@ -105,6 +105,7 @@ mod tests {
             issues: vec![],
             stats: TestStats::default(),
             framework: TestFramework::Jest,
+            test_type: TestType::Unit,
             source_file: None,
         };
 

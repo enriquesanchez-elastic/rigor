@@ -1,0 +1,23 @@
+{
+  "name": "fake-project",
+  "version": "1.0.0",
+  "description": "Fake TypeScript repo for testing Rigor",
+  "private": true,
+  "scripts": {
+    "test": "jest",
+    "test:vitest": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@testing-library/react": "^14.0.0",
+    "@types/jest": "^29.5.0",
+    "@types/react": "^18.2.0",
+    "cypress": "^13.0.0",
+    "jest": "^29.7.0",
+    "react": "^18.2.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

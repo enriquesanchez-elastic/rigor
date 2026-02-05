@@ -1,7 +1,7 @@
 //! Report mutation testing results.
 
 use super::relevance::relevance_summary;
-use super::MutationResult;
+use super::{BatchMutationResult, MutationResult};
 use colored::Colorize;
 
 /// Print mutation result to stdout, including a relevance section when mutants survived.
@@ -62,5 +62,66 @@ pub fn report(result: &MutationResult) {
         }
     }
 
+    println!();
+}
+
+/// Print batch mutation results to stdout
+pub fn report_batch(result: &BatchMutationResult) {
+    println!();
+    println!("{}", "Batch Mutation Testing Results".bold());
+    println!("   Files analyzed: {}", result.source_results.len());
+    println!("   Total mutants: {}", result.total_mutants);
+    println!(
+        "   Killed: {} ({}%), Survived: {}",
+        result.total_killed,
+        result.overall_score as u32,
+        result.total_survived
+    );
+    println!("   {}: {:.1}%", "Overall Score".bold(), result.overall_score);
+    
+    // Per-file breakdown
+    if !result.source_results.is_empty() {
+        println!();
+        println!("   {}", "Per-file breakdown:".bold());
+        for file_result in &result.source_results {
+            let pct = file_result.score() as u32;
+            let status = if pct >= 80 {
+                format!("{}%", pct).green()
+            } else if pct >= 60 {
+                format!("{}%", pct).yellow()
+            } else {
+                format!("{}%", pct).red()
+            };
+            println!(
+                "   {} {} ({}/{} killed)",
+                status,
+                file_result.source_path.display(),
+                file_result.killed,
+                file_result.total
+            );
+        }
+    }
+    
+    // Find worst performing files
+    let mut files_with_survivors: Vec<_> = result.source_results
+        .iter()
+        .filter(|r| r.survived > 0)
+        .collect();
+    files_with_survivors.sort_by(|a, b| b.survived.cmp(&a.survived));
+    
+    if !files_with_survivors.is_empty() {
+        println!();
+        println!("   {}", "Files needing attention:".bold());
+        for file_result in files_with_survivors.iter().take(5) {
+            println!(
+                "   • {} - {} survivors",
+                file_result.source_path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "?".to_string()),
+                file_result.survived
+            );
+        }
+    }
+    
     println!();
 }

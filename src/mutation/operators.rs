@@ -154,6 +154,31 @@ fn make_ops() -> Vec<MutationOperator> {
             replacements: vec!["+= 1"],
             description: "-= 1 to += 1",
         },
+        // --- TypeScript-specific operators ---
+        // Optional chaining: ?. -> . (may cause runtime errors if value is null)
+        MutationOperator {
+            pattern: Regex::new(r"\?\.").unwrap(),
+            replacements: vec!["."],
+            description: "?. to . (optional chaining removed)",
+        },
+        // Nullish coalescing: ?? -> || (different falsy behavior)
+        MutationOperator {
+            pattern: Regex::new(r" \?\? ").unwrap(),
+            replacements: vec![" || "],
+            description: "?? to || (nullish to logical or)",
+        },
+        // Non-null assertion at end of expressions: )! -> )
+        MutationOperator {
+            pattern: Regex::new(r"\)!\.").unwrap(),
+            replacements: vec![")."],
+            description: ")! to ) (non-null assertion removed)",
+        },
+        // Non-null assertion: identifier! followed by . or ) or ; or ,
+        MutationOperator {
+            pattern: Regex::new(r"!\.").unwrap(),
+            replacements: vec!["."],
+            description: "!. to . (non-null assertion removed)",
+        },
     ]
 }
 
@@ -268,5 +293,38 @@ mod tests {
             .filter(|m| m.description.contains("++") || m.description.contains("--") || m.description.contains("+=") || m.description.contains("-="))
             .collect();
         assert!(!inc_ops.is_empty());
+    }
+
+    #[test]
+    fn test_typescript_optional_chaining_mutations() {
+        let s = "const name = user?.profile?.name;";
+        let mutations = generate_mutations(s);
+        let ts_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("optional chaining"))
+            .collect();
+        assert!(!ts_ops.is_empty(), "Should have optional chaining mutations");
+    }
+
+    #[test]
+    fn test_typescript_nullish_coalescing_mutations() {
+        let s = "const value = input ?? 'default';";
+        let mutations = generate_mutations(s);
+        let ts_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("nullish"))
+            .collect();
+        assert!(!ts_ops.is_empty(), "Should have nullish coalescing mutations");
+    }
+
+    #[test]
+    fn test_typescript_non_null_assertion_mutations() {
+        let s = "const element = document.getElementById('app')!.innerText;";
+        let mutations = generate_mutations(s);
+        let ts_ops: Vec<_> = mutations
+            .iter()
+            .filter(|m| m.description.contains("non-null"))
+            .collect();
+        assert!(!ts_ops.is_empty(), "Should have non-null assertion mutations");
     }
 }

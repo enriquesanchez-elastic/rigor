@@ -2,17 +2,18 @@
 
 use crate::config::{Config, RuleSeverity, SourceMappingMode};
 use crate::detector::{FrameworkDetector, SourceMapper};
-use crate::parser::{IgnoreDirectives, TestFileParser, TypeScriptParser};
+use crate::parser::{IgnoreDirectives, SourceFileParser, TestFileParser, TypeScriptParser};
 use crate::{AnalysisResult, Issue, Score};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::rules::{
-    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule, BoundaryConditionsRule,
-    BoundarySpecificityRule, DebugCodeRule, ErrorCoverageRule, FlakyPatternsRule, InputVarietyRule,
-    MockAbuseRule, MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule,
-    StateVerificationRule, TestIsolationRule, TrivialAssertionRule,
+    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule, BehavioralCompletenessRule,
+    BoundaryConditionsRule, BoundarySpecificityRule, CouplingAnalysisRule, DebugCodeRule, ErrorCoverageRule,
+    FlakyPatternsRule, InputVarietyRule, MockAbuseRule, MutationResistantRule, NamingQualityRule,
+    ReactTestingLibraryRule, ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule,
+    TestIsolationRule, TrivialAssertionRule,
 };
 use super::ScoreCalculator;
 
@@ -108,11 +109,12 @@ impl AnalysisEngine {
         // Extract test cases
         let test_parser = TestFileParser::new(&source);
         let tests = test_parser.extract_tests(&tree);
-        let stats = test_parser.extract_stats(&tree);
+        let mut stats = test_parser.extract_stats(&tree);
 
-        // Detect framework
+        // Detect framework and test type
         let framework_detector = FrameworkDetector::new(&source);
         let framework = framework_detector.detect(&tree);
+        let test_type = framework_detector.detect_test_type(test_path, framework);
 
         // Determine if source analysis should be skipped for this file
         let skip_source = if let Some(cfg) = config {
@@ -161,6 +163,13 @@ impl AnalysisEngine {
         } else {
             (None, None)
         };
+        
+        // Calculate function coverage if source is available
+        if let (Some(ref src_content), Some(ref src_tree)) = (&source_content, &source_tree) {
+            let source_parser = SourceFileParser::new(src_content);
+            let coverage = source_parser.calculate_coverage(src_tree, &source);
+            stats.function_coverage = Some(coverage);
+        }
 
         // Run all rules
         let assertion_rule = AssertionQualityRule::new();
@@ -187,6 +196,21 @@ impl AnalysisEngine {
         let state_verification_rule = StateVerificationRule::new();
         let assertion_intent_rule = AssertionIntentRule::new();
         let trivial_assertion_rule = TrivialAssertionRule::new();
+        let return_path_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+            ReturnPathCoverageRule::new().with_source(content, tree)
+        } else {
+            ReturnPathCoverageRule::new()
+        };
+        let behavioral_completeness_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+            BehavioralCompletenessRule::new().with_source(content, tree)
+        } else {
+            BehavioralCompletenessRule::new()
+        };
+        let side_effect_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+            SideEffectVerificationRule::new().with_source(content, tree)
+        } else {
+            SideEffectVerificationRule::new()
+        };
 
         // Collect all issues
         let mut issues = Vec::new();
@@ -206,6 +230,16 @@ impl AnalysisEngine {
         issues.extend(state_verification_rule.analyze(&tests, &source, &tree));
         issues.extend(assertion_intent_rule.analyze(&tests, &source, &tree));
         issues.extend(trivial_assertion_rule.analyze(&tests, &source, &tree));
+        issues.extend(return_path_rule.analyze(&tests, &source, &tree));
+        issues.extend(behavioral_completeness_rule.analyze(&tests, &source, &tree));
+        issues.extend(side_effect_rule.analyze(&tests, &source, &tree));
+
+        // Run coupling analysis if we have function coverage data
+        if let Some(ref fc) = stats.function_coverage {
+            let coupling_rule = CouplingAnalysisRule::new()
+                .with_source_exports(fc.untested_exports.clone());
+            issues.extend(coupling_rule.analyze(&tests, &source, &tree));
+        }
 
         // Apply ignore comments: filter issues that have rigor-ignore on their line
         let ignore_directives = IgnoreDirectives::parse(&source);
@@ -227,7 +261,10 @@ impl AnalysisEngine {
             &isolation_rule,
             &variety_rule,
         );
-        let score = ScoreCalculator::calculate(&breakdown);
+        // Use weighted scoring based on test type for more accurate assessment
+        let score = ScoreCalculator::calculate_weighted(&breakdown, test_type);
+        // Apply issue-based penalty so problems (errors/warnings/info) lower the grade
+        let score = ScoreCalculator::apply_issue_penalty(score, &issues);
 
         Ok(AnalysisResult {
             file_path: test_path.to_path_buf(),
@@ -236,6 +273,7 @@ impl AnalysisEngine {
             issues,
             stats,
             framework,
+            test_type,
             source_file,
         })
     }
@@ -328,5 +366,45 @@ mod tests {
         assert_eq!(result.stats.total_tests, 1);
         assert_eq!(result.stats.total_assertions, 1);
         assert!(result.score.value > 0);
+        // Trivial assertion (expect(1).toBe(1)) and vague name should incur penalty — not A
+        assert!(
+            result.score.value < 90,
+            "file with trivial assertion should not get A (got {})",
+            result.score.value
+        );
+    }
+
+    #[test]
+    fn test_issue_penalty_lowers_grade() {
+        let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
+        writeln!(
+            file,
+            r#"
+            describe('bad', () => {{
+                it('test 1', () => {{
+                    const x = 1;
+                    expect(x).toBeDefined();
+                    expect(x).toBeTruthy();
+                }});
+                it('test 2', () => {{
+                    expect(1).toBe(1);
+                }});
+            }});
+        "#
+        )
+        .unwrap();
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let result = engine.analyze(file.path(), None).unwrap();
+
+        assert_eq!(result.stats.total_tests, 2);
+        assert!(!result.issues.is_empty(), "should report weak/trivial issues");
+        // Many issues (weak assertions, trivial, vague names) should pull score down to C or worse
+        assert!(
+            result.score.value < 80,
+            "file with weak + trivial assertions and vague names should not get B or A (got {} = {})",
+            result.score.value,
+            result.score.grade
+        );
     }
 }

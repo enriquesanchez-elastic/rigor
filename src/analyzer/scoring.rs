@@ -1,11 +1,20 @@
 //! Score calculation for test quality
 
-use crate::{Grade, Issue, Score, ScoreBreakdown, TestCase};
+use crate::{Grade, Issue, Score, ScoreBreakdown, ScoringWeights, Severity, TestCase, TestType};
 
 use super::rules::{
     AssertionQualityRule, BoundaryConditionsRule, ErrorCoverageRule, InputVarietyRule,
     TestIsolationRule,
 };
+
+/// Penalty points per issue by severity (applied after category score).
+/// Ensures files with many reported problems cannot get A/B.
+const PENALTY_PER_ERROR: i32 = 5;
+const PENALTY_PER_WARNING: i32 = 2;
+const PENALTY_PER_INFO: i32 = 1;
+const MAX_PENALTY_FROM_ERRORS: i32 = 35;
+const MAX_PENALTY_FROM_WARNINGS: i32 = 40;
+const MAX_PENALTY_FROM_INFO: i32 = 15;
 
 /// Calculator for test quality scores
 pub struct ScoreCalculator;
@@ -15,6 +24,29 @@ impl ScoreCalculator {
     pub fn calculate(breakdown: &ScoreBreakdown) -> Score {
         let total = breakdown.total();
         Score::new(total)
+    }
+
+    /// Calculate the overall score with test-type-specific weights
+    pub fn calculate_weighted(breakdown: &ScoreBreakdown, test_type: TestType) -> Score {
+        let weights = ScoringWeights::for_test_type(test_type);
+        let total = weights.calculate_total(breakdown);
+        Score::new(total)
+    }
+
+    /// Apply issue-based penalty so that files with many problems get lower grades.
+    /// Errors and warnings (trivial assertions, debug code, flaky patterns, etc.)
+    /// now directly reduce the final score.
+    pub fn apply_issue_penalty(score: Score, issues: &[Issue]) -> Score {
+        let errors = issues.iter().filter(|i| i.severity == Severity::Error).count() as i32;
+        let warnings = issues.iter().filter(|i| i.severity == Severity::Warning).count() as i32;
+        let infos = issues.iter().filter(|i| i.severity == Severity::Info).count() as i32;
+
+        let penalty = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS)
+            + (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS)
+            + (infos * PENALTY_PER_INFO).min(MAX_PENALTY_FROM_INFO);
+
+        let value = (score.value as i32 - penalty).max(0).min(100) as u8;
+        Score::new(value)
     }
 
     /// Calculate breakdown from tests and issues

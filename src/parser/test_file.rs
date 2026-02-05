@@ -238,7 +238,9 @@ impl<'a> TestFileParser<'a> {
         // Check for Cypress .should() pattern: cy.get(...).should('exist'), .should('be.visible'), etc.
         if function.kind() == "member_expression" {
             let property = function.child_by_field_name("property")?;
-            if self.node_text(property) == "should" {
+            let prop_name = self.node_text(property);
+            
+            if prop_name == "should" {
                 let args = node.child_by_field_name("arguments")?;
                 let mut cursor = args.walk();
                 let first_arg = args.named_children(&mut cursor).next()?;
@@ -258,8 +260,106 @@ impl<'a> TestFileParser<'a> {
                 });
             }
         }
+        
+        // Check for Cypress implicit assertions (cy.contains, cy.url, cy.intercept, etc.)
+        if let Some(assertion) = self.try_parse_cypress_implicit_assertion(node) {
+            return Some(assertion);
+        }
 
         None
+    }
+    
+    /// Try to parse Cypress implicit assertions (commands that implicitly assert)
+    fn try_parse_cypress_implicit_assertion(&self, node: Node) -> Option<Assertion> {
+        let function = node.child_by_field_name("function")?;
+        
+        // Check if this is a Cypress command chain rooted at 'cy'
+        if !self.is_cypress_chain(function) {
+            return None;
+        }
+        
+        // Get the final method name in the chain
+        let method_name = if function.kind() == "member_expression" {
+            let property = function.child_by_field_name("property")?;
+            self.node_text(property)
+        } else {
+            return None;
+        };
+        
+        let kind = match method_name {
+            "contains" => AssertionKind::CyContains,
+            "url" => AssertionKind::CyUrl,
+            "intercept" => AssertionKind::CyIntercept,
+            "visit" => AssertionKind::CyVisit,
+            "click" | "type" | "clear" | "check" | "uncheck" | "select" | "focus" | "blur" 
+            | "submit" | "trigger" | "scrollTo" | "scrollIntoView" | "dblclick" | "rightclick" => {
+                AssertionKind::CyAction
+            }
+            "get" | "find" | "first" | "last" | "eq" | "parent" | "children" | "siblings" => {
+                // cy.get() without .should() is a weak implicit assertion
+                // Check if the parent call has .should() - if so, don't count twice
+                if self.has_should_in_chain(node) {
+                    return None;
+                }
+                AssertionKind::CyGetImplicit
+            }
+            _ => return None,
+        };
+        
+        let location = Location::new(
+            node.start_position().row + 1,
+            node.start_position().column + 1,
+        );
+        
+        Some(Assertion {
+            kind: kind.clone(),
+            quality: kind.quality(),
+            location,
+            raw: self.node_text(node).to_string(),
+        })
+    }
+    
+    /// Check if a call expression is part of a Cypress chain (rooted at 'cy')
+    fn is_cypress_chain(&self, node: Node) -> bool {
+        match node.kind() {
+            "identifier" => self.node_text(node) == "cy",
+            "member_expression" => {
+                if let Some(object) = node.child_by_field_name("object") {
+                    self.is_cypress_chain(object)
+                } else {
+                    false
+                }
+            }
+            "call_expression" => {
+                if let Some(function) = node.child_by_field_name("function") {
+                    self.is_cypress_chain(function)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+    
+    /// Check if any parent/sibling in the chain has a .should() call
+    fn has_should_in_chain(&self, node: Node) -> bool {
+        // Walk up to find if we're part of a longer chain that includes .should()
+        if let Some(parent) = node.parent() {
+            if parent.kind() == "member_expression" {
+                if let Some(property) = parent.child_by_field_name("property") {
+                    if self.node_text(property) == "should" {
+                        return true;
+                    }
+                }
+                // Check further up the chain
+                if let Some(grandparent) = parent.parent() {
+                    if grandparent.kind() == "call_expression" {
+                        return self.has_should_in_chain(grandparent);
+                    }
+                }
+            }
+        }
+        false
     }
 
     fn cypress_should_to_assertion_kind(&self, assertion_type: &str) -> AssertionKind {
@@ -271,7 +371,17 @@ impl<'a> TestFileParser<'a> {
             "have.length" => AssertionKind::CyShouldHaveLength,
             "eq" | "equal" => AssertionKind::CyShouldEqual,
             "be.disabled" => AssertionKind::CyShouldBeDisabled,
-            "have.attr" => AssertionKind::CyShouldHaveAttr,
+            "have.attr" | "have.attribute" => AssertionKind::CyShouldHaveAttr,
+            // URL-related assertions (cy.url().should())
+            "include" => AssertionKind::CyUrl,
+            "match" => AssertionKind::CyUrl,
+            // Value assertions
+            "have.value" => AssertionKind::CyShouldEqual,
+            "have.class" => AssertionKind::CyShouldHaveAttr,
+            "have.css" => AssertionKind::CyShouldHaveAttr,
+            // State assertions
+            "be.enabled" | "be.checked" | "be.selected" | "be.focused" => AssertionKind::CyShouldBeVisible,
+            "not.exist" | "not.be.visible" | "be.empty" | "be.hidden" => AssertionKind::CyShouldExist,
             other => AssertionKind::Unknown(other.to_string()),
         }
     }
@@ -445,5 +555,34 @@ mod tests {
         assert!(matches!(tests[0].assertions[0].kind, AssertionKind::CyShouldExist));
         assert!(matches!(tests[0].assertions[1].kind, AssertionKind::CyShouldBeVisible));
         assert!(matches!(tests[0].assertions[2].kind, AssertionKind::CyShouldHaveText));
+    }
+
+    #[test]
+    fn test_extract_cypress_implicit_assertions() {
+        let source = r#"
+            it('cypress implicit assertions', () => {
+                cy.visit('/dashboard');
+                cy.contains('Welcome');
+                cy.url().should('include', '/dashboard');
+                cy.intercept('GET', '/api/user').as('getUser');
+                cy.get('.button').click();
+            });
+        "#;
+
+        let mut parser = TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let test_parser = TestFileParser::new(source);
+        let tests = test_parser.extract_tests(&tree);
+
+        assert_eq!(tests.len(), 1);
+        // Should detect: visit, contains, url().should(), intercept, get().click()
+        assert!(tests[0].assertions.len() >= 4, "Expected at least 4 assertions, got {}", tests[0].assertions.len());
+        
+        // Check for CyVisit
+        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyVisit)), "Should detect cy.visit()");
+        // Check for CyContains
+        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyContains)), "Should detect cy.contains()");
+        // Check for CyIntercept
+        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyIntercept)), "Should detect cy.intercept()");
     }
 }

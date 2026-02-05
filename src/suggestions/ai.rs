@@ -1,5 +1,6 @@
 //! AI suggestion generator for test improvements
 
+use crate::mutation::MutationResult;
 use crate::{AnalysisResult, Issue, Rule, Severity};
 use std::fs;
 use std::path::Path;
@@ -8,17 +9,28 @@ use std::path::Path;
 pub struct AiSuggestionGenerator {
     /// Include detailed code examples in suggestions
     detailed: bool,
+    /// Optional mutation testing results
+    mutation_result: Option<MutationResult>,
 }
 
 impl AiSuggestionGenerator {
     /// Create a new AI suggestion generator
     pub fn new() -> Self {
-        Self { detailed: true }
+        Self { 
+            detailed: true,
+            mutation_result: None,
+        }
     }
 
     /// Set detailed mode
     pub fn detailed(mut self, detailed: bool) -> Self {
         self.detailed = detailed;
+        self
+    }
+    
+    /// Add mutation testing results to enhance the prompt
+    pub fn with_mutation_result(mut self, result: MutationResult) -> Self {
+        self.mutation_result = Some(result);
         self
     }
 
@@ -36,6 +48,7 @@ impl AiSuggestionGenerator {
         let issues_text = self.format_issues_detailed(&result.issues);
         let test_hints = self.generate_test_hints(result, &source_content);
         let score_breakdown = self.format_score_breakdown(result);
+        let mutation_section = self.format_mutation_results();
 
         let prompt = format!(
             r#"You are an expert test quality engineer. Improve the following test file to achieve a score of 90+.
@@ -48,7 +61,7 @@ impl AiSuggestionGenerator {
 
 ## Issues to Fix
 {}
-{}
+{}{}
 ## Current Test Code
 ```typescript
 {}
@@ -58,7 +71,7 @@ impl AiSuggestionGenerator {
 
 ### Priority 1: Fix Critical Issues
 {}
-
+{}
 ### Priority 2: Strengthen Assertions
 - Replace `.toBeDefined()` with `.toBe(expectedValue)` or `.toEqual(expectedObject)`
 - Replace `.toBeTruthy()` with `.toBe(true)` when checking booleans
@@ -84,6 +97,7 @@ The code should be complete and runnable.
             } else {
                 format!("## Test Generation Hints\n{}\n", test_hints)
             },
+            mutation_section,
             test_content,
             if source_content.is_empty() {
                 String::new()
@@ -99,10 +113,124 @@ The code should be complete and runnable.
                 )
             },
             self.format_critical_fixes(&result.issues),
+            self.format_mutation_fixes(),
             self.format_missing_tests(&result.issues),
         );
 
         prompt
+    }
+    
+    /// Format mutation testing results for inclusion in the prompt
+    fn format_mutation_results(&self) -> String {
+        let Some(ref mutation) = self.mutation_result else {
+            return String::new();
+        };
+        
+        if mutation.total == 0 {
+            return String::new();
+        }
+        
+        let score = mutation.score() as u32;
+        let mut output = format!(
+            r#"
+## Mutation Testing Results
+**Mutation Score:** {}% ({}/{} mutants killed)
+
+"#,
+            score, mutation.killed, mutation.total
+        );
+        
+        // List survived mutants (these are opportunities for better tests)
+        let survivors: Vec<_> = mutation.details.iter()
+            .filter(|r| !r.killed)
+            .collect();
+        
+        if !survivors.is_empty() {
+            output.push_str("### Survived Mutants (Tests didn't catch these changes)\n");
+            for (i, run) in survivors.iter().take(10).enumerate() {
+                output.push_str(&format!(
+                    "{}. Line {}: `{}` → `{}` ({})\n",
+                    i + 1,
+                    run.mutation.line,
+                    run.mutation.original.trim(),
+                    run.mutation.replacement.trim(),
+                    run.mutation.description
+                ));
+            }
+            if survivors.len() > 10 {
+                output.push_str(&format!("   ... and {} more\n", survivors.len() - 10));
+            }
+            output.push('\n');
+        }
+        
+        output
+    }
+    
+    /// Format mutation-specific fix suggestions
+    fn format_mutation_fixes(&self) -> String {
+        let Some(ref mutation) = self.mutation_result else {
+            return String::new();
+        };
+        
+        let survivors: Vec<_> = mutation.details.iter()
+            .filter(|r| !r.killed)
+            .collect();
+        
+        if survivors.is_empty() {
+            return String::new();
+        }
+        
+        let mut output = String::from("\n### Priority 0: Kill Survived Mutants\n");
+        output.push_str("The following source code changes were NOT detected by tests. Add assertions that would fail if these mutations were applied:\n\n");
+        
+        for run in survivors.iter().take(5) {
+            let suggestion = Self::suggest_fix_for_mutation(run);
+            output.push_str(&format!(
+                "- **Line {}:** `{}` → `{}`\n  {}\n",
+                run.mutation.line,
+                run.mutation.original.trim(),
+                run.mutation.replacement.trim(),
+                suggestion
+            ));
+        }
+        
+        output.push('\n');
+        output
+    }
+    
+    /// Suggest a fix for a specific survived mutation
+    fn suggest_fix_for_mutation(run: &crate::mutation::MutationRun) -> String {
+        let desc = run.mutation.description.to_lowercase();
+        
+        if desc.contains(">=") || desc.contains("<=") || desc.contains("> to") || desc.contains("< to") {
+            return "→ Add boundary value test: test with the exact boundary value (e.g., if `x >= 5`, test with `x = 5` and `x = 4`)".to_string();
+        }
+        
+        if desc.contains("true") || desc.contains("false") {
+            return "→ Add boolean assertion: verify the exact boolean value, not just truthiness".to_string();
+        }
+        
+        if desc.contains("+") || desc.contains("-") || desc.contains("*") || desc.contains("/") {
+            return "→ Add arithmetic verification: test with specific input values that would produce different results with the mutation".to_string();
+        }
+        
+        if desc.contains("string") || desc.contains("empty") {
+            return "→ Add string content assertion: verify the exact string value, not just that it exists".to_string();
+        }
+        
+        if desc.contains("return") {
+            return "→ Add return value assertion: verify the specific return value, not just that it's defined".to_string();
+        }
+        
+        if desc.contains("optional chaining") || desc.contains("?.") {
+            return "→ Add null safety test: verify behavior when the value is null/undefined".to_string();
+        }
+        
+        if desc.contains("nullish") || desc.contains("??") {
+            return "→ Test nullish coalescing: verify correct handling of null vs falsy values (0, '', false)".to_string();
+        }
+        
+        "→ Add specific assertion that would fail if this mutation was applied".to_string()
     }
 
     /// Generate a more concise prompt for quick fixes
@@ -359,7 +487,7 @@ impl Default for AiSuggestionGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Location, Rule, Score, ScoreBreakdown, TestFramework, TestStats};
+    use crate::{Location, Rule, Score, ScoreBreakdown, TestFramework, TestStats, TestType};
     use std::path::PathBuf;
 
     #[test]
@@ -383,6 +511,7 @@ mod tests {
             }],
             stats: TestStats::default(),
             framework: TestFramework::Jest,
+            test_type: TestType::Unit,
             source_file: None,
         };
 
