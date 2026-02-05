@@ -99,9 +99,9 @@ fn threshold_at_exact_boundary() {
 
 #[test]
 fn threshold_one_above_score_fails() {
-    // auth.test.ts scores 83; threshold 84 should fail
+    // auth.test.ts scores 85; threshold 86 should fail
     let mut cmd = rigor_cmd();
-    cmd.arg(AUTH_TEST).arg("--threshold").arg("84");
+    cmd.arg(AUTH_TEST).arg("--threshold").arg("86");
     cmd.assert().failure().code(1);
 }
 
