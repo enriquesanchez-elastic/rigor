@@ -2,10 +2,6 @@
 
 **Fast test quality linting for TypeScript.** Analyzes your tests with static analysis and returns a score (0–100) with actionable issues. No test execution required.
 
-[![Build](https://github.com/rigor-dev/rigor/actions/workflows/ci.yml/badge.svg)](https://github.com/rigor-dev/rigor/actions)
-[![npm version](https://img.shields.io/npm/v/rigor-cli.svg)](https://www.npmjs.com/package/rigor-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
 ## Why Rigor?
 
 | | Rigor | Stryker / PIT / mutmut |
