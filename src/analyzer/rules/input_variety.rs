@@ -13,39 +13,144 @@ impl InputVarietyRule {
         Self
     }
 
-    /// Extract test values used in assertions
+    /// Extract test values used in assertions (excluding test names, imports, console.log args)
     fn extract_test_values(source: &str, tree: &Tree) -> Vec<TestValue> {
         let mut values = Vec::new();
         Self::visit_for_values(tree.root_node(), source, &mut values);
         values
     }
 
+    /// True if this value node should be excluded (test name, import path, console.log arg)
+    fn should_skip_value_node(node: Node, source: &str) -> bool {
+        let mut current = node.parent();
+        while let Some(parent) = current {
+            match parent.kind() {
+                "import_statement" => return true,
+                "arguments" => {
+                    let args = parent;
+                    let first_arg = args.named_children(&mut args.walk()).next();
+                    let is_first_arg = first_arg
+                        .map(|f| {
+                            node.start_byte() >= f.start_byte() && node.end_byte() <= f.end_byte()
+                        })
+                        .unwrap_or(false);
+                    if let Some(call) = parent.parent() {
+                        if call.kind() == "call_expression" {
+                            if let Some(callee) = call.child_by_field_name("function") {
+                                if callee.kind() == "member_expression" {
+                                    let obj = callee
+                                        .child_by_field_name("object")
+                                        .map(|o| Self::node_text(o, source))
+                                        .unwrap_or_default();
+                                    let prop = callee
+                                        .child_by_field_name("property")
+                                        .map(|p| Self::node_text(p, source))
+                                        .unwrap_or_default();
+                                    if obj == "console"
+                                        && (prop == "log"
+                                            || prop == "warn"
+                                            || prop == "debug"
+                                            || prop == "error")
+                                    {
+                                        return true;
+                                    }
+                                }
+                                let name = Self::node_text(callee, source);
+                                let is_test_name = is_first_arg
+                                    && (name == "it"
+                                        || name == "test"
+                                        || name == "describe"
+                                        || name.starts_with("it.")
+                                        || name.starts_with("test.")
+                                        || name.starts_with("describe."));
+                                if is_test_name {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            current = parent.parent();
+        }
+        false
+    }
+
+    fn node_text(node: Node, source: &str) -> String {
+        node.utf8_text(source.as_bytes())
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    }
+
     fn visit_for_values(node: Node, source: &str, values: &mut Vec<TestValue>) {
         // Look for literal values in expect() calls and test data
         match node.kind() {
             "string" | "template_string" => {
-                let text = node.utf8_text(source.as_bytes()).unwrap_or("");
-                let location = Location::new(
-                    node.start_position().row + 1,
-                    node.start_position().column + 1,
-                );
-                values.push(TestValue {
-                    kind: ValueKind::String,
-                    raw: text.to_string(),
-                    location,
-                });
+                if Self::should_skip_value_node(node, source) {
+                    // Recurse only, don't push
+                } else {
+                    let text = node.utf8_text(source.as_bytes()).unwrap_or("");
+                    let location = Location::new(
+                        node.start_position().row + 1,
+                        node.start_position().column + 1,
+                    );
+                    values.push(TestValue {
+                        kind: ValueKind::String,
+                        raw: text.to_string(),
+                        location,
+                    });
+                }
             }
             "number" => {
-                let text = node.utf8_text(source.as_bytes()).unwrap_or("");
-                let location = Location::new(
-                    node.start_position().row + 1,
-                    node.start_position().column + 1,
-                );
-                values.push(TestValue {
-                    kind: ValueKind::Number,
-                    raw: text.to_string(),
-                    location,
-                });
+                if Self::should_skip_value_node(node, source) {
+                    // recurse only
+                } else {
+                    let text = node.utf8_text(source.as_bytes()).unwrap_or("");
+                    let (raw, location) = if let Some(par) = node.parent() {
+                        if par.kind() == "unary_expression" {
+                            let par_text = par.utf8_text(source.as_bytes()).unwrap_or("");
+                            if par_text.trim_start().starts_with('-') {
+                                (
+                                    par_text.to_string(),
+                                    Location::new(
+                                        par.start_position().row + 1,
+                                        par.start_position().column + 1,
+                                    ),
+                                )
+                            } else {
+                                (
+                                    text.to_string(),
+                                    Location::new(
+                                        node.start_position().row + 1,
+                                        node.start_position().column + 1,
+                                    ),
+                                )
+                            }
+                        } else {
+                            (
+                                text.to_string(),
+                                Location::new(
+                                    node.start_position().row + 1,
+                                    node.start_position().column + 1,
+                                ),
+                            )
+                        }
+                    } else {
+                        (
+                            text.to_string(),
+                            Location::new(
+                                node.start_position().row + 1,
+                                node.start_position().column + 1,
+                            ),
+                        )
+                    };
+                    values.push(TestValue {
+                        kind: ValueKind::Number,
+                        raw,
+                        location,
+                    });
+                }
             }
             "true" | "false" => {
                 let text = node.utf8_text(source.as_bytes()).unwrap_or("");

@@ -175,9 +175,11 @@ impl AnalysisEngine {
         let assertion_rule = AssertionQualityRule::new();
         let error_rule =
             if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-                ErrorCoverageRule::new().with_source(content, tree)
-            } else {
                 ErrorCoverageRule::new()
+                    .with_source(content, tree)
+                    .with_test_type(test_type)
+            } else {
+                ErrorCoverageRule::new().with_test_type(test_type)
             };
         let boundary_rule =
             if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
@@ -188,7 +190,7 @@ impl AnalysisEngine {
         let isolation_rule = TestIsolationRule::new();
         let variety_rule = InputVarietyRule::new();
         let debug_rule = DebugCodeRule::new();
-        let flaky_rule = FlakyPatternsRule::new();
+        let flaky_rule = FlakyPatternsRule::new().with_framework(framework);
         let mock_rule = MockAbuseRule::new();
         let naming_rule = NamingQualityRule::new();
         let async_rule = AsyncPatternsRule::new();

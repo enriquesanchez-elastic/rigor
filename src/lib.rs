@@ -585,12 +585,26 @@ impl AssertionKind {
             | AssertionKind::CyVisit
             | AssertionKind::CyAction => AssertionQuality::Weak,
 
-            // Negated assertions inherit quality but weaken it
-            AssertionKind::Negated(inner) => match inner.quality() {
-                AssertionQuality::Strong => AssertionQuality::Moderate,
-                AssertionQuality::Moderate => AssertionQuality::Weak,
-                _ => AssertionQuality::Weak,
-            },
+            // Negated assertions: preserve Strong for not.toHaveBeenCalled(), not.toThrow(), not.toBe(), not.toEqual()
+            AssertionKind::Negated(inner) => {
+                let inner_quality = inner.quality();
+                let preserves_strong = matches!(
+                    **inner,
+                    AssertionKind::ToHaveBeenCalled
+                        | AssertionKind::ToThrow
+                        | AssertionKind::ToBe
+                        | AssertionKind::ToEqual
+                );
+                if preserves_strong {
+                    AssertionQuality::Strong
+                } else {
+                    match inner_quality {
+                        AssertionQuality::Strong => AssertionQuality::Moderate,
+                        AssertionQuality::Moderate => AssertionQuality::Weak,
+                        _ => AssertionQuality::Weak,
+                    }
+                }
+            }
 
             AssertionKind::Unknown(_) => AssertionQuality::None,
         }

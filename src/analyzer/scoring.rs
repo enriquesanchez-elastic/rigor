@@ -1,6 +1,8 @@
 //! Score calculation for test quality
 
-use crate::{Grade, Issue, Score, ScoreBreakdown, ScoringWeights, Severity, TestCase, TestType};
+use crate::{
+    Grade, Issue, Rule, Score, ScoreBreakdown, ScoringWeights, Severity, TestCase, TestType,
+};
 
 use super::rules::{
     AssertionQualityRule, BoundaryConditionsRule, ErrorCoverageRule, InputVarietyRule,
@@ -90,39 +92,89 @@ impl ScoreCalculator {
         }
     }
 
-    /// Get recommendations based on breakdown scores
-    pub fn recommendations(breakdown: &ScoreBreakdown) -> Vec<String> {
+    /// Get recommendations based on breakdown scores, issues, and grade.
+    /// Uses category thresholds of 20 and adds issue-driven recommendations.
+    pub fn recommendations(
+        breakdown: &ScoreBreakdown,
+        issues: &[Issue],
+        grade: Grade,
+    ) -> Vec<String> {
         let mut recs = Vec::new();
 
-        if breakdown.assertion_quality < 15 {
+        // Category-based (threshold 20)
+        if breakdown.assertion_quality < 20 {
             recs.push(
                 "Focus on using stronger assertions like toBe() and toEqual() with specific values"
                     .to_string(),
             );
         }
-
-        if breakdown.error_coverage < 15 {
+        if breakdown.error_coverage < 20 {
             recs.push(
                 "Add tests for error conditions using toThrow() or rejects.toThrow()".to_string(),
             );
         }
-
-        if breakdown.boundary_conditions < 15 {
+        if breakdown.boundary_conditions < 20 {
             recs.push("Test edge cases and boundary values (0, empty, min/max)".to_string());
         }
-
-        if breakdown.test_isolation < 15 {
+        if breakdown.test_isolation < 20 {
             recs.push("Ensure tests are isolated - use beforeEach to reset state".to_string());
         }
-
-        if breakdown.input_variety < 15 {
+        if breakdown.input_variety < 20 {
             recs.push(
                 "Vary test inputs - include edge cases like null, empty, negative".to_string(),
             );
         }
 
+        // Issue-driven recommendations
+        let flaky_count = issues
+            .iter()
+            .filter(|i| i.rule == Rule::FlakyPattern)
+            .count();
+        if flaky_count >= 3 {
+            recs.push(
+                "Mock non-deterministic APIs (Date.now, Math.random) for reliable tests"
+                    .to_string(),
+            );
+        }
+        let rtl_count = issues
+            .iter()
+            .filter(|i| {
+                i.rule == Rule::RtlPreferScreen
+                    || i.rule == Rule::RtlPreferSemantic
+                    || i.rule == Rule::RtlPreferUserEvent
+            })
+            .count();
+        if rtl_count >= 2 {
+            recs.push(
+                "Use semantic queries (getByRole, getByLabelText) instead of getByTestId / querySelector"
+                    .to_string(),
+            );
+        }
+        let vague_count = issues
+            .iter()
+            .filter(|i| i.rule == Rule::VagueTestName)
+            .count();
+        if vague_count >= 2 {
+            recs.push("Use descriptive test names that state expected behavior".to_string());
+        }
+        let focused_count = issues
+            .iter()
+            .filter(|i| i.rule == Rule::FocusedTest)
+            .count();
+        if focused_count >= 2 {
+            recs.push("Remove .only / fit() so the full test suite runs".to_string());
+        }
+        if issues.iter().any(|i| i.rule == Rule::DebugCode) {
+            recs.push("Remove debugger statements and console.log from tests".to_string());
+        }
+
+        // Fallback by grade
         if recs.is_empty() {
-            recs.push("Tests are in good shape! Consider adding more edge cases.".to_string());
+            if matches!(grade, Grade::A | Grade::B) {
+                recs.push("Tests are in good shape! Consider adding more edge cases.".to_string());
+            } else {
+                recs.push("Address the warnings above to improve test quality.".to_string());
+            }
         }
 
         recs
@@ -312,13 +364,13 @@ mod tests {
             test_isolation: 10,
             input_variety: 10,
         };
-        let recs = ScoreCalculator::recommendations(&breakdown);
-        assert_eq!(recs.len(), 5);
-        assert!(recs[0].contains("assertion"));
-        assert!(recs[1].contains("error"));
-        assert!(recs[2].contains("edge cases"));
-        assert!(recs[3].contains("isolated"));
-        assert!(recs[4].contains("Vary"));
+        let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::F);
+        assert!(recs.len() >= 5);
+        assert!(recs.iter().any(|r| r.contains("assertion")));
+        assert!(recs.iter().any(|r| r.contains("error")));
+        assert!(recs.iter().any(|r| r.contains("edge cases")));
+        assert!(recs.iter().any(|r| r.contains("isolated")));
+        assert!(recs.iter().any(|r| r.contains("Vary")));
     }
 
     #[test]
@@ -330,9 +382,23 @@ mod tests {
             test_isolation: 20,
             input_variety: 20,
         };
-        let recs = ScoreCalculator::recommendations(&breakdown);
+        let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::A);
         assert_eq!(recs.len(), 1);
         assert!(recs[0].contains("good shape"));
+    }
+
+    #[test]
+    fn test_recommendations_grade_fallback_below_b() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 25,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+        };
+        let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::C);
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].contains("Address the warnings"));
     }
 
     #[test]

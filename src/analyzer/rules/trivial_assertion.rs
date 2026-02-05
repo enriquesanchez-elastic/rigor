@@ -27,6 +27,25 @@ fn trivial_patterns() -> Vec<Regex> {
     .collect()
 }
 
+/// Any same number both sides: expect(2).toBe(2), expect(42).toEqual(42) — used on lowercased normalized string
+fn same_number_both_sides_re() -> Regex {
+    Regex::new(r"expect\((\d+)\)\.to(be|equal|strictequal)\((\d+)\)").unwrap()
+}
+
+/// Same string literal both sides: expect('hello').toBe('hello') — used on lowercased normalized string.
+/// Rust regex has no backreferences, so we use two patterns (single and double quote) and check content equality.
+fn same_string_single_quote_re() -> Regex {
+    Regex::new(r#"expect\('([^']*)'\)\.to(be|equal|strictequal)\('([^']*)'\)"#).unwrap()
+}
+fn same_string_double_quote_re() -> Regex {
+    Regex::new(r#"expect\("([^"]*)"\)\.to(be|equal|strictequal)\("([^"]*)"\)"#).unwrap()
+}
+
+/// Same identifier both sides: expect(arr).toEqual(arr) — used on lowercased normalized string
+fn same_identifier_both_sides_re() -> Regex {
+    Regex::new(r"expect\((\w+)\)\.to(equal|strictequal)\((\w+)\)").unwrap()
+}
+
 impl TrivialAssertionRule {
     pub fn new() -> Self {
         Self
@@ -38,7 +57,7 @@ impl TrivialAssertionRule {
         trivial_patterns().iter().any(|re| re.is_match(&normalized))
     }
 
-    /// expect(1).toBe(1) style — same number both sides (regex backref may not match 1/1)
+    /// expect(1).toBe(1) style — same number both sides (explicit 0/1/true/false for compatibility)
     fn same_number_both_sides(raw: &str) -> bool {
         let n: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
         let n_lower = n.to_lowercase();
@@ -48,6 +67,73 @@ impl TrivialAssertionRule {
             || n_lower.contains("expect(0).toequal(0)")
             || n_lower.contains("expect(true).tobe(true)")
             || n_lower.contains("expect(false).tobe(false)")
+    }
+
+    /// Any numeric literal equal on both sides: expect(2).toBe(2), expect(42).toEqual(42)
+    fn is_trivial_same_number(raw: &str) -> bool {
+        let normalized: String = raw
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .to_lowercase();
+        same_number_both_sides_re()
+            .captures(&normalized)
+            .and_then(|c| {
+                let a = c.get(1)?.as_str();
+                let b = c.get(3)?.as_str();
+                if a == b {
+                    Some(())
+                } else {
+                    None
+                }
+            })
+            .is_some()
+    }
+
+    /// Same string literal on both sides: expect('hello').toBe('hello')
+    fn is_trivial_same_string(raw: &str) -> bool {
+        let normalized: String = raw
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .to_lowercase();
+        let check = |c: regex::Captures| {
+            let left = c.get(1).and_then(|m| Some(m.as_str()));
+            let right = c.get(3).and_then(|m| Some(m.as_str()));
+            match (left, right) {
+                (Some(a), Some(b)) if a == b => Some(()),
+                _ => None,
+            }
+        };
+        same_string_single_quote_re()
+            .captures(&normalized)
+            .and_then(check)
+            .is_some()
+            || same_string_double_quote_re()
+                .captures(&normalized)
+                .and_then(check)
+                .is_some()
+    }
+
+    /// Same variable on both sides: expect(arr).toEqual(arr)
+    fn is_trivial_same_identifier(raw: &str) -> bool {
+        let normalized: String = raw
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .to_lowercase();
+        same_identifier_both_sides_re()
+            .captures(&normalized)
+            .and_then(|c| {
+                let a = c.get(1)?.as_str();
+                let b = c.get(3)?.as_str();
+                if a == b {
+                    Some(())
+                } else {
+                    None
+                }
+            })
+            .is_some()
     }
 }
 
@@ -77,7 +163,12 @@ impl AnalysisRule for TrivialAssertionRule {
                     continue;
                 }
 
-                if Self::is_trivial_literal(raw) || Self::same_number_both_sides(raw) {
+                if Self::is_trivial_literal(raw)
+                    || Self::same_number_both_sides(raw)
+                    || Self::is_trivial_same_number(raw)
+                    || Self::is_trivial_same_string(raw)
+                    || Self::is_trivial_same_identifier(raw)
+                {
                     trivial_count += 1;
                     issues.push(Issue {
                         rule: Rule::TrivialAssertion,
@@ -199,5 +290,67 @@ mod tests {
             .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_trivial_same_number_any_value() {
+        let tests = vec![
+            test_case(
+                "two",
+                vec![assertion(AssertionKind::ToBe, "expect(2).toBe(2)")],
+            ),
+            test_case(
+                "forty-two",
+                vec![assertion(AssertionKind::ToEqual, "expect(42).toEqual(42)")],
+            ),
+        ];
+        let rule = TrivialAssertionRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
+        for test in &tests {
+            let issues = rule.analyze(&[test.clone()], "", &tree);
+            assert!(
+                !issues.is_empty(),
+                "should flag expect(2).toBe(2) and expect(42).toEqual(42)"
+            );
+        }
+    }
+
+    #[test]
+    fn flags_trivial_same_string_literal() {
+        let tests = vec![test_case(
+            "literal string",
+            vec![assertion(
+                AssertionKind::ToBe,
+                "expect('hello').toBe('hello')",
+            )],
+        )];
+        let rule = TrivialAssertionRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+        assert!(!issues.is_empty());
+    }
+
+    #[test]
+    fn flags_trivial_same_identifier() {
+        let tests = vec![test_case(
+            "array identity",
+            vec![assertion(
+                AssertionKind::ToEqual,
+                "expect(arr).toEqual(arr)",
+            )],
+        )];
+        let rule = TrivialAssertionRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+        assert!(!issues.is_empty());
     }
 }

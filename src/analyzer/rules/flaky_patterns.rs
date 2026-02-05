@@ -1,15 +1,79 @@
 //! Flaky test pattern detection - non-deterministic code without mocks
 
 use super::AnalysisRule;
-use crate::{Issue, Location, Rule, Severity, TestCase};
+use crate::{Issue, Location, Rule, Severity, TestCase, TestFramework};
 use tree_sitter::Tree;
 
+enum TimerSuggestionKind {
+    Date,
+    Advance,
+}
+
 /// Rule for detecting flaky patterns (Date.now, Math.random, timers, etc.)
-pub struct FlakyPatternsRule;
+pub struct FlakyPatternsRule {
+    framework: Option<TestFramework>,
+}
 
 impl FlakyPatternsRule {
     pub fn new() -> Self {
-        Self
+        Self { framework: None }
+    }
+
+    pub fn with_framework(mut self, framework: TestFramework) -> Self {
+        self.framework = Some(framework);
+        self
+    }
+
+    fn timer_suggestion(&self, kind: TimerSuggestionKind) -> String {
+        match self.framework {
+            Some(TestFramework::Vitest) => match kind {
+                TimerSuggestionKind::Date => {
+                    "Use vi.useFakeTimers() and vi.setSystemTime() for deterministic dates"
+                        .to_string()
+                }
+                TimerSuggestionKind::Advance => {
+                    "Use vi.useFakeTimers() and vi.advanceTimersByTime()".to_string()
+                }
+            },
+            Some(TestFramework::Playwright) => match kind {
+                TimerSuggestionKind::Date => {
+                    "Use page.clock or test.use(clock) for deterministic time in Playwright"
+                        .to_string()
+                }
+                TimerSuggestionKind::Advance => {
+                    "Use page.clock and advance time with clock.tick() in Playwright".to_string()
+                }
+            },
+            Some(TestFramework::Cypress) => match kind {
+                TimerSuggestionKind::Date => {
+                    "Use cy.clock() and cy.tick() for deterministic dates in Cypress".to_string()
+                }
+                TimerSuggestionKind::Advance => {
+                    "Use cy.clock() and cy.tick() to control timers in Cypress".to_string()
+                }
+            },
+            _ => match kind {
+                TimerSuggestionKind::Date => {
+                    "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
+                        .to_string()
+                }
+                TimerSuggestionKind::Advance => {
+                    "Use jest.useFakeTimers() and jest.advanceTimersByTime()".to_string()
+                }
+            },
+        }
+    }
+
+    fn random_mock_suggestion(&self) -> String {
+        match self.framework {
+            Some(TestFramework::Vitest) => {
+                "Use vi.spyOn(Math, 'random').mockReturnValue(0.5) or similar".to_string()
+            }
+            Some(TestFramework::Playwright) | Some(TestFramework::Cypress) => {
+                "Mock Math.random for deterministic results in this test".to_string()
+            }
+            _ => "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar".to_string(),
+        }
     }
 
     /// Check if file has fake timers (jest.useFakeTimers, vi.useFakeTimers)
@@ -64,14 +128,10 @@ impl AnalysisRule for FlakyPatternsRule {
                 issues.push(Issue {
                     rule: Rule::FlakyPattern,
                     severity: Severity::Warning,
-                    message:
-                        "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it"
-                            .to_string(),
+                    message: "Date.now() is non-deterministic - use fake timers or mock it"
+                        .to_string(),
                     location: Location::new(line_no, col),
-                    suggestion: Some(
-                        "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
-                            .to_string(),
-                    ),
+                    suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
                 });
             }
 
@@ -83,10 +143,10 @@ impl AnalysisRule for FlakyPatternsRule {
                 issues.push(Issue {
                     rule: Rule::FlakyPattern,
                     severity: Severity::Info,
-                    message: "new Date() is non-deterministic - consider jest.useFakeTimers()"
+                    message: "new Date() is non-deterministic - consider using fake timers"
                         .to_string(),
                     location: Location::new(line_no, col),
-                    suggestion: Some("Use fake timers to control time in tests".to_string()),
+                    suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
                 });
             }
 
@@ -99,10 +159,7 @@ impl AnalysisRule for FlakyPatternsRule {
                     message: "Math.random() is non-deterministic - mock it for reproducible tests"
                         .to_string(),
                     location: Location::new(line_no, col),
-                    suggestion: Some(
-                        "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar"
-                            .to_string(),
-                    ),
+                    suggestion: Some(self.random_mock_suggestion()),
                 });
             }
 
@@ -124,9 +181,7 @@ impl AnalysisRule for FlakyPatternsRule {
                         message: "setTimeout/setInterval with literal delay can cause flaky tests"
                             .to_string(),
                         location: Location::new(line_no, col),
-                        suggestion: Some(
-                            "Use jest.useFakeTimers() and jest.advanceTimersByTime()".to_string(),
-                        ),
+                        suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Advance)),
                     });
                 }
             }
