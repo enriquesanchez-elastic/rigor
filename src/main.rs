@@ -27,7 +27,6 @@ struct Args {
     command: Option<Commands>,
 
     /// Test file or directory to analyze (omit when using a subcommand)
-    #[arg(required_unless_present = "command")]
     path: Option<PathBuf>,
 
     /// Output format as JSON
@@ -158,10 +157,14 @@ fn run() -> Result<ExitCode> {
         }
     }
 
-    let path = args
-        .path
-        .clone()
-        .expect("path required when not using subcommand");
+    let path = match &args.path {
+        Some(p) => p.clone(),
+        None => {
+            anyhow::bail!(
+                "Please provide a path to a test file or directory, or use a subcommand (e.g. rigor init)"
+            );
+        }
+    };
 
     if args.watch {
         return run_watch(&args, &path);

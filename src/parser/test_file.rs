@@ -621,3 +621,98 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod proptest_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Strategy that generates random strings that look vaguely like TypeScript test content.
+    fn arbitrary_ts_content() -> impl Strategy<Value = String> {
+        prop::collection::vec(
+            prop::sample::select(vec![
+                "describe(",
+                "it(",
+                "test(",
+                "expect(",
+                "beforeEach(",
+                "afterEach(",
+                ")",
+                "{",
+                "}",
+                ";",
+                "\n",
+                " ",
+                ".",
+                "'test'",
+                "() => ",
+                "true",
+                "false",
+                ".toBe(",
+                ".toEqual(",
+                ".toThrow(",
+                ".toBeTruthy()",
+                "const x = 1;",
+            ]),
+            0..30,
+        )
+        .prop_map(|parts| parts.join(""))
+    }
+
+    /// Build nested describe/it source for property tests.
+    fn build_nested_source(depth: usize, test_count: usize) -> String {
+        let mut source = String::new();
+        for i in 0..depth {
+            source.push_str("describe('level ");
+            source.push_str(&i.to_string());
+            source.push_str("', () => {\n");
+        }
+        for i in 0..test_count {
+            source.push_str("  it('test ");
+            source.push_str(&i.to_string());
+            source.push_str("', () => { expect(true).toBe(true); });\n");
+        }
+        for _ in 0..depth {
+            source.push_str("});\n");
+        }
+        source
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(200))]
+
+        #[test]
+        fn parser_never_panics_on_arbitrary_input(ref input in ".{0,500}") {
+            let mut ts_parser = crate::parser::TypeScriptParser::new().unwrap();
+            if let Ok(tree) = ts_parser.parse(input) {
+                let parser = TestFileParser::new(input);
+                let _tests = parser.extract_tests(&tree);
+                let _stats = parser.extract_stats(&tree);
+            }
+        }
+
+        #[test]
+        fn parser_never_panics_on_ts_like_input(ref input in arbitrary_ts_content()) {
+            let mut ts_parser = crate::parser::TypeScriptParser::new().unwrap();
+            if let Ok(tree) = ts_parser.parse(input) {
+                let parser = TestFileParser::new(input);
+                let _tests = parser.extract_tests(&tree);
+                let _stats = parser.extract_stats(&tree);
+            }
+        }
+
+        #[test]
+        fn parser_never_panics_on_nested_describe(
+            depth in 1usize..10,
+            test_count in 1usize..5
+        ) {
+            let source = build_nested_source(depth, test_count);
+            let mut ts_parser = crate::parser::TypeScriptParser::new().unwrap();
+            if let Ok(tree) = ts_parser.parse(&source) {
+                let parser = TestFileParser::new(&source);
+                let tests = parser.extract_tests(&tree);
+                prop_assert!(tests.len() <= test_count);
+            }
+        }
+    }
+}

@@ -159,3 +159,70 @@ impl AnalysisRule for MockAbuseRule {
         score.clamp(0, 25) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Issue, Location, Severity, TestCase};
+
+    fn make_empty_tests() -> Vec<TestCase> {
+        vec![]
+    }
+
+    #[test]
+    fn positive_detects_excessive_mocks() {
+        let rule = MockAbuseRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = (0..6)
+            .map(|_| "jest.mock('foo');")
+            .collect::<Vec<_>>()
+            .join("\n");
+        let issues = rule.analyze(&make_empty_tests(), &source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));
+    }
+
+    #[test]
+    fn positive_detects_std_lib_mock() {
+        let rule = MockAbuseRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "jest.mock('Math');";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));
+    }
+
+    #[test]
+    fn negative_few_mocks_no_issue() {
+        let rule = MockAbuseRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "jest.mock('my-module');\nit('works', () => {});";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = MockAbuseRule::new();
+        let tests = make_empty_tests();
+        let zero_issues: Vec<Issue> = vec![];
+        let one_issue = vec![Issue {
+            rule: Rule::MockAbuse,
+            severity: Severity::Warning,
+            message: "test".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
+        assert_eq!(rule.calculate_score(&tests, &one_issue), 21);
+    }
+}

@@ -235,6 +235,7 @@ impl AnalysisRule for TestIsolationRule {
 mod tests {
     use super::*;
     use crate::parser::TypeScriptParser;
+    use crate::{Location, TestCase};
 
     #[test]
     fn test_detect_shared_state() {
@@ -281,5 +282,31 @@ mod tests {
         assert!(shared_state
             .iter()
             .any(|s| s.kind == SharedStateKind::SetupTeardownHook));
+    }
+
+    #[test]
+    fn test_analyze_returns_shared_state_issue() {
+        let source = r#"
+            let shared = 0;
+            describe('suite', () => {
+                it('uses shared', () => { expect(shared).toBe(0); });
+            });
+        "#;
+        let mut parser = TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let tests = vec![TestCase {
+            name: "uses shared".to_string(),
+            location: Location::new(3, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: Some("suite".to_string()),
+        }];
+        let rule = TestIsolationRule::new();
+        let issues = rule.analyze(&tests, source, &tree);
+        assert!(
+            issues.iter().any(|i| i.rule == Rule::SharedState),
+            "analyze() should report SharedState for module-level let without beforeEach"
+        );
     }
 }

@@ -184,3 +184,74 @@ impl AnalysisRule for SideEffectVerificationRule {
         (25 - deduction).max(0) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Issue, Severity, TestCase};
+
+    #[test]
+    fn negative_no_source_returns_empty() {
+        let rule = SideEffectVerificationRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("it('test', () => {});")
+            .unwrap();
+        let tests = vec![TestCase {
+            name: "addItem".to_string(),
+            location: crate::Location::new(1, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: None,
+        }];
+        let test_source = "";
+        let issues = rule.analyze(&tests, test_source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn positive_with_source_mutation_not_asserted() {
+        let source_content = r#"
+        function appendItem(arr: number[]): number[] {
+            arr.push(1);
+            return arr;
+        }
+        "#;
+        let mut parser = crate::parser::TypeScriptParser::new().unwrap();
+        let source_tree = parser.parse(source_content).unwrap();
+        let rule =
+            SideEffectVerificationRule::new().with_source(source_content.to_string(), source_tree);
+        let tests = vec![TestCase {
+            name: "appendItem".to_string(),
+            location: crate::Location::new(2, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: None,
+        }];
+        let test_source = "const out = appendItem([]); expect(out).toEqual([1]);";
+        let tree = parser.parse(test_source).unwrap();
+        let issues = rule.analyze(&tests, test_source, &tree);
+        assert!(
+            issues.iter().any(|i| i.rule == Rule::SideEffectNotVerified),
+            "expected SideEffectNotVerified when mutation target not in expect()"
+        );
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = SideEffectVerificationRule::new();
+        let tests: Vec<TestCase> = vec![];
+        let zero_issues: Vec<Issue> = vec![];
+        let one_issue = vec![Issue {
+            rule: Rule::SideEffectNotVerified,
+            severity: Severity::Warning,
+            message: "test".to_string(),
+            location: crate::Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
+        assert_eq!(rule.calculate_score(&tests, &one_issue), 20);
+    }
+}

@@ -304,3 +304,240 @@ pub struct EffectiveConfig {
     pub rules: HashMap<String, RuleSeverity>,
     pub skip_source_analysis: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rule_severity_to_severity() {
+        assert_eq!(
+            RuleSeverity::Error.to_severity(),
+            Some(crate::Severity::Error)
+        );
+        assert_eq!(
+            RuleSeverity::Warning.to_severity(),
+            Some(crate::Severity::Warning)
+        );
+        assert_eq!(
+            RuleSeverity::Info.to_severity(),
+            Some(crate::Severity::Info)
+        );
+        assert_eq!(RuleSeverity::Off.to_severity(), None);
+    }
+
+    #[test]
+    fn test_rule_severity_from_config() {
+        let mut rules = HashMap::new();
+        rules.insert("weak-assertion".to_string(), RuleSeverity::Error);
+        rules.insert("debug-code".to_string(), RuleSeverity::Off);
+
+        let config = Config {
+            rules,
+            ..Config::default()
+        };
+
+        assert_eq!(
+            config.rule_severity("weak-assertion"),
+            Some(RuleSeverity::Error)
+        );
+        assert_eq!(config.rule_severity("debug-code"), Some(RuleSeverity::Off));
+        assert_eq!(config.rule_severity("nonexistent-rule"), None);
+    }
+
+    #[test]
+    fn test_effective_for_file_e2e_override() {
+        let config: Config = serde_json::from_str(
+            r#"{
+                "threshold": 70,
+                "overrides": [
+                    {
+                        "files": ["**/*.e2e.test.ts"],
+                        "skipSourceAnalysis": true,
+                        "threshold": 50,
+                        "rules": { "weak-assertion": "off" }
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let effective = config.effective_for_file(Path::new("src/auth.e2e.test.ts"));
+        assert!(effective.skip_source_analysis);
+        assert_eq!(effective.threshold, Some(50));
+        assert_eq!(
+            effective.rules.get("weak-assertion"),
+            Some(&RuleSeverity::Off)
+        );
+    }
+
+    #[test]
+    fn test_effective_for_file_no_override_match() {
+        let config: Config = serde_json::from_str(
+            r#"{
+                "threshold": 70,
+                "rules": { "debug-code": "error" },
+                "overrides": [
+                    {
+                        "files": ["**/legacy/**"],
+                        "threshold": 40
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let effective = config.effective_for_file(Path::new("src/auth.test.ts"));
+        assert_eq!(effective.threshold, Some(70));
+        assert!(!effective.skip_source_analysis);
+        assert_eq!(
+            effective.rules.get("debug-code"),
+            Some(&RuleSeverity::Error)
+        );
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.threshold, None);
+        assert!(config.rules.is_empty());
+        assert!(config.ignore.is_empty());
+        assert_eq!(config.framework, FrameworkOverride::Auto);
+        assert_eq!(config.source_mapping.mode, SourceMappingMode::Auto);
+    }
+
+    #[test]
+    fn test_config_merge_with_cli() {
+        let config = Config {
+            threshold: Some(70),
+            ..Config::default()
+        };
+
+        let merged = config.merge_with_cli(Some(90), None);
+        assert_eq!(merged.threshold, Some(90));
+    }
+
+    #[test]
+    fn test_config_merge_with_cli_no_override() {
+        let config = Config {
+            threshold: Some(70),
+            ..Config::default()
+        };
+
+        let merged = config.merge_with_cli(None, None);
+        assert_eq!(merged.threshold, Some(70));
+    }
+
+    #[test]
+    fn test_get_test_patterns_default() {
+        let config = Config::default();
+        let patterns = config.get_test_patterns();
+        assert!(patterns.contains(&".test.ts"));
+        assert!(patterns.contains(&".spec.ts"));
+        assert!(patterns.contains(&".cy.ts"));
+    }
+
+    #[test]
+    fn test_get_test_patterns_custom() {
+        let config = Config {
+            test_patterns: vec!["_test.ts".to_string()],
+            ..Config::default()
+        };
+        let patterns = config.get_test_patterns();
+        assert_eq!(patterns, vec!["_test.ts"]);
+    }
+
+    #[test]
+    fn test_config_merge_from() {
+        let mut child = Config {
+            threshold: Some(80),
+            ..Config::default()
+        };
+
+        let mut base_rules = HashMap::new();
+        base_rules.insert("weak-assertion".to_string(), RuleSeverity::Error);
+        base_rules.insert("debug-code".to_string(), RuleSeverity::Warning);
+
+        let base = Config {
+            threshold: Some(60),
+            rules: base_rules,
+            ignore: vec!["**/legacy/**".to_string()],
+            framework: FrameworkOverride::Vitest,
+            ..Config::default()
+        };
+
+        child.merge_from(base);
+
+        // Child threshold takes precedence
+        assert_eq!(child.threshold, Some(80));
+        // Base rules inherited
+        assert_eq!(
+            child.rules.get("weak-assertion"),
+            Some(&RuleSeverity::Error)
+        );
+        assert_eq!(child.rules.get("debug-code"), Some(&RuleSeverity::Warning));
+        // Base ignore inherited
+        assert!(child.ignore.contains(&"**/legacy/**".to_string()));
+        // Base framework inherited when child is Auto
+        assert_eq!(child.framework, FrameworkOverride::Vitest);
+    }
+
+    #[test]
+    fn test_config_deserialization_full() {
+        let json = r#"{
+            "threshold": 75,
+            "framework": "jest",
+            "rules": {
+                "weak-assertion": "error",
+                "debug-code": "off",
+                "no-assertions": "warning"
+            },
+            "ignore": ["**/legacy/**", "**/generated/**"],
+            "sourceMapping": {
+                "mode": "manual",
+                "sourceRoot": "src",
+                "testRoot": "tests",
+                "mappings": {
+                    "tests/**/*.test.ts": "src/**/*.ts"
+                }
+            },
+            "testPatterns": [".test.ts", ".spec.ts"],
+            "testRoot": "tests"
+        }"#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.threshold, Some(75));
+        assert_eq!(config.framework, FrameworkOverride::Jest);
+        assert_eq!(config.rules.len(), 3);
+        assert_eq!(config.ignore.len(), 2);
+        assert_eq!(config.source_mapping.mode, SourceMappingMode::Manual);
+        assert_eq!(config.source_mapping.source_root, Some("src".to_string()));
+        assert_eq!(config.source_mapping.mappings.len(), 1);
+        assert_eq!(config.test_patterns.len(), 2);
+        assert_eq!(config.test_root, Some("tests".to_string()));
+    }
+
+    #[test]
+    fn test_multiple_overrides_applied_in_order() {
+        let config: Config = serde_json::from_str(
+            r#"{
+                "threshold": 70,
+                "overrides": [
+                    {
+                        "files": ["**/tests/**"],
+                        "threshold": 60
+                    },
+                    {
+                        "files": ["**/tests/legacy/**"],
+                        "threshold": 40
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        // A file matching both overrides: second should win (applied in order)
+        let effective = config.effective_for_file(Path::new("src/tests/legacy/old.test.ts"));
+        assert_eq!(effective.threshold, Some(40));
+    }
+}

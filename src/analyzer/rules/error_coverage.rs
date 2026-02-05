@@ -32,8 +32,10 @@ impl ErrorCoverageRule {
             let name_lower = test.name.to_lowercase();
             let fn_name_lower = fn_name.to_lowercase();
 
-            let mentions_function =
-                name_lower.contains(&fn_name_lower) || name_lower.contains("error");
+            // The function name must actually appear in the test name.
+            // Previously `name_lower.contains("error")` was here too, which caused
+            // any test with "error" in its name to match ANY function — a false positive.
+            let mentions_function = name_lower.contains(&fn_name_lower);
 
             let mentions_error = name_lower.contains("throw")
                 || name_lower.contains("error")
@@ -209,12 +211,38 @@ mod tests {
 
     #[test]
     fn test_error_test_detection() {
+        // Test must reference the function name (e.g. in assertion), not just the word "error"
+        let mut throw_assertion = make_throw_assertion();
+        throw_assertion.raw = "expect(() => parseInput(invalid)).toThrow()".to_string();
         let tests = vec![make_test(
-            "should throw error on invalid input",
+            "parseInput throws on invalid input",
+            vec![throw_assertion],
+        )];
+
+        assert!(ErrorCoverageRule::has_error_test(&tests, "parseInput"));
+        assert!(!ErrorCoverageRule::has_error_test(&tests, "otherFunction"));
+    }
+
+    #[test]
+    fn test_error_keyword_in_name_does_not_match_unrelated_function() {
+        // Regression: a test named "should handle error for X" must NOT match
+        // a completely unrelated function just because "error" appears in the name.
+        let tests = vec![make_test(
+            "should handle error for submitForm",
             vec![make_throw_assertion()],
         )];
 
-        assert!(ErrorCoverageRule::has_error_test(&tests, "someFunction"));
+        // Matches submitForm because the name contains "submitform" + "error"
+        assert!(ErrorCoverageRule::has_error_test(&tests, "submitForm"));
+        // Must NOT match an unrelated function — "error" in the name is not enough
+        assert!(
+            !ErrorCoverageRule::has_error_test(&tests, "calculateTax"),
+            "test with 'error' in name should not match unrelated function 'calculateTax'"
+        );
+        assert!(
+            !ErrorCoverageRule::has_error_test(&tests, "validateAge"),
+            "test with 'error' in name should not match unrelated function 'validateAge'"
+        );
     }
 
     #[test]

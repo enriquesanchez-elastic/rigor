@@ -20,3 +20,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+.rigor-cache.json
+.rigor-history.json
+lcov.info

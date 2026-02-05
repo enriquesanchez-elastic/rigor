@@ -113,3 +113,56 @@ impl AnalysisRule for ReactTestingLibraryRule {
         score.clamp(0, 25) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Issue, Location, Severity, TestCase};
+
+    fn make_empty_tests() -> Vec<TestCase> {
+        vec![]
+    }
+
+    #[test]
+    fn positive_detects_query_selector_with_rtl() {
+        let rule = ReactTestingLibraryRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = r#"
+        import { render } from '@testing-library/react';
+        const { container } = render(<App />);
+        const btn = container.querySelector('.button');
+        "#;
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::RtlPreferScreen));
+    }
+
+    #[test]
+    fn negative_no_rtl_import_no_issues() {
+        let rule = ReactTestingLibraryRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "it('works', () => { expect(1).toBe(1); });";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = ReactTestingLibraryRule::new();
+        let tests = make_empty_tests();
+        let one_issue = vec![Issue {
+            rule: Rule::RtlPreferScreen,
+            severity: Severity::Warning,
+            message: "test".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &one_issue), 23);
+    }
+}
