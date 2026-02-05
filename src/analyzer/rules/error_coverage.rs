@@ -2,13 +2,15 @@
 
 use super::AnalysisRule;
 use crate::parser::SourceFileParser;
-use crate::{AssertionKind, Issue, Location, Rule, Severity, TestCase};
+use crate::{AssertionKind, Issue, Location, Rule, Severity, TestCase, TestType};
 use tree_sitter::Tree;
 
 /// Rule for analyzing error handling coverage
 pub struct ErrorCoverageRule {
     source_content: Option<String>,
     source_tree: Option<Tree>,
+    /// When E2e, skip per-test "appears to test error handling" heuristic (e2e tests check error display, not exceptions).
+    test_type: TestType,
 }
 
 impl ErrorCoverageRule {
@@ -16,6 +18,7 @@ impl ErrorCoverageRule {
         Self {
             source_content: None,
             source_tree: None,
+            test_type: TestType::Unit,
         }
     }
 
@@ -23,6 +26,12 @@ impl ErrorCoverageRule {
     pub fn with_source(mut self, content: String, tree: Tree) -> Self {
         self.source_content = Some(content);
         self.source_tree = Some(tree);
+        self
+    }
+
+    /// Set test type (e.g. E2e) to adjust heuristics
+    pub fn with_test_type(mut self, test_type: TestType) -> Self {
+        self.test_type = test_type;
         self
     }
 
@@ -107,35 +116,52 @@ impl AnalysisRule for ErrorCoverageRule {
             }
         }
 
-        // Also check if tests that should test errors actually use toThrow
-        for test in tests {
-            let name_lower = test.name.to_lowercase();
-            let should_test_error = name_lower.contains("throw")
-                || name_lower.contains("error")
-                || name_lower.contains("fail")
-                || name_lower.contains("invalid")
-                || name_lower.contains("reject");
+        // Skip per-test "appears to test error handling" heuristic for E2e (they check error display, not exceptions).
+        if self.test_type != TestType::E2e {
+            for test in tests {
+                let name_lower = test.name.to_lowercase();
+                let should_test_error = name_lower.contains("throw")
+                    || name_lower.contains("error")
+                    || name_lower.contains("fail")
+                    || name_lower.contains("invalid")
+                    || name_lower.contains("reject");
 
-            if should_test_error {
-                let has_error_assertion = test.assertions.iter().any(|a| {
-                    matches!(a.kind, AssertionKind::ToThrow)
-                        || a.raw.contains("rejects")
-                        || a.raw.contains("catch")
-                });
-
-                if !has_error_assertion && !test.assertions.is_empty() {
-                    issues.push(Issue {
-                        rule: Rule::MissingErrorTest,
-                        severity: Severity::Info,
-                        message: format!(
-                            "Test '{}' appears to test error handling but has no toThrow/rejects assertion",
-                            test.name
-                        ),
-                        location: test.location.clone(),
-                        suggestion: Some(
-                            "Sync: expect(() => fn(bad)).toThrow(ErrorType); Async: await expect(fn()).rejects.toThrow('message')".to_string()
-                        ),
+                if should_test_error {
+                    // "invalid X is falsy" tests boolean return, not exceptions — don't flag
+                    let only_invalid = name_lower.contains("invalid")
+                        && !name_lower.contains("throw")
+                        && !name_lower.contains("reject")
+                        && !name_lower.contains("error");
+                    let has_boolean_assertion = test.assertions.iter().any(|a| {
+                        let r = a.raw.to_lowercase();
+                        r.contains("tobefalsy")
+                            || r.contains("tobe(false)")
+                            || r.contains("tobe(true)")
                     });
+                    if only_invalid && has_boolean_assertion {
+                        continue;
+                    }
+
+                    let has_error_assertion = test.assertions.iter().any(|a| {
+                        matches!(a.kind, AssertionKind::ToThrow)
+                            || a.raw.contains("rejects")
+                            || a.raw.contains("catch")
+                    });
+
+                    if !has_error_assertion && !test.assertions.is_empty() {
+                        issues.push(Issue {
+                            rule: Rule::MissingErrorTest,
+                            severity: Severity::Info,
+                            message: format!(
+                                "Test '{}' appears to test error handling but has no toThrow/rejects assertion",
+                                test.name
+                            ),
+                            location: test.location.clone(),
+                            suggestion: Some(
+                                "Sync: expect(() => fn(bad)).toThrow(ErrorType); Async: await expect(fn()).rejects.toThrow('message')".to_string()
+                            ),
+                        });
+                    }
                 }
             }
         }

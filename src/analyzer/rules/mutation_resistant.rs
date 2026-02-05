@@ -28,35 +28,43 @@ impl AnalysisRule for MutationResistantRule {
 
     fn analyze(&self, tests: &[TestCase], _source: &str, _tree: &Tree) -> Vec<Issue> {
         let mut issues = Vec::new();
+        let raw_lower = |raw: &str| raw.to_lowercase();
 
         for test in tests {
             for assertion in &test.assertions {
                 let (flag, suggestion) = match &assertion.kind {
-                    AssertionKind::ToBeGreaterThan | AssertionKind::ToBeLessThan => {
-                        if assertion.raw.contains("> 0")
-                            || assertion.raw.contains("< 1")
-                            || assertion.raw.contains(">= 0")
-                        {
-                            (
-                            true,
-                            "Replace with exact value: expect(result).toBe(3) so mutations (e.g. off-by-one) are caught".to_string(),
-                        )
-                        } else {
-                            (false, String::new())
-                        }
-                    }
-                    _ => {
-                        if assertion.raw.contains("toHaveLength(0)")
-                            || assertion.raw.contains("toHaveLength(1)")
+                    AssertionKind::ToBeGreaterThan => {
+                        let r = raw_lower(&assertion.raw);
+                        // expect(x).toBeGreaterThan(0) or toBeGreaterThanOrEqual(0) lets any positive value pass
+                        if r.contains("tobegreaterthan(0)")
+                            || r.contains("tobegreaterthanorequal(0)")
+                            || r.contains(">= 0")
+                            || r.contains("> 0")
                         {
                             (
                                 true,
-                                "Consider asserting exact length: expect(arr).toHaveLength(3) to catch mutation-resistant bugs".to_string(),
+                                "Replace with exact value: expect(result).toBe(expected) so mutations (e.g. off-by-one) are caught".to_string(),
                             )
                         } else {
                             (false, String::new())
                         }
                     }
+                    AssertionKind::ToBeLessThan => {
+                        let r = raw_lower(&assertion.raw);
+                        // expect(x).toBeLessThanOrEqual(max) or toBeLessThan(1) allows many values to pass
+                        if r.contains("tobelessthanorequal(")
+                            || r.contains("tobelessthan(1)")
+                            || r.contains("< 1")
+                        {
+                            (
+                                true,
+                                "Replace with exact value: expect(result).toBe(expected) so mutations are caught".to_string(),
+                            )
+                        } else {
+                            (false, String::new())
+                        }
+                    }
+                    _ => (false, String::new()),
                 };
                 if flag {
                     issues.push(Issue {

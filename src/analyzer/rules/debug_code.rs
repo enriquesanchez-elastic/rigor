@@ -110,12 +110,13 @@ impl AnalysisRule for DebugCodeRule {
             }
         }
 
-        // Scan again for it.only / test.only / fit / ftest
+        // Scan again for it.only / test.only / describe.only / fit / ftest
         for (zero_indexed, line) in source.lines().enumerate() {
             let line_no = zero_indexed + 1;
             let trimmed = line.trim();
             if trimmed.contains("it.only(")
                 || trimmed.contains("test.only(")
+                || trimmed.contains("describe.only(")
                 || trimmed.contains("fit(")
                 || trimmed.contains("ftest(")
             {

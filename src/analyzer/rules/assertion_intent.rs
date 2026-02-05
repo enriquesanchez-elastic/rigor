@@ -181,8 +181,14 @@ impl AnalysisRule for AssertionIntentRule {
                 });
             }
 
-            // Name suggests empty but no empty assertion
-            if Self::name_implies_empty(name) && !Self::has_empty_assertion(&test.assertions) {
+            // Name suggests empty but no empty assertion.
+            // Skip when "empty" describes the input (e.g. "for empty email") not the expected result: test has toThrow.
+            let empty_is_input_not_result = Self::has_throw_assertion(&test.assertions)
+                && name.to_lowercase().contains("empty");
+            if Self::name_implies_empty(name)
+                && !Self::has_empty_assertion(&test.assertions)
+                && !empty_is_input_not_result
+            {
                 issues.push(Issue {
                     rule: Rule::AssertionIntentMismatch,
                     severity: Severity::Warning,

@@ -174,25 +174,32 @@ impl<'a> TestFileParser<'a> {
             let method_name = self.node_text(property);
             let object = function.child_by_field_name("object")?;
 
-            // Check if it's a negated assertion (expect().not.matcher())
-            let (kind, is_negated) = if object.kind() == "member_expression" {
+            // Check for negated (expect().not.matcher()) or promise (expect().resolves/rejects.matcher())
+            let (kind, is_negated, expect_call) = if object.kind() == "member_expression" {
                 let inner_prop = object.child_by_field_name("property")?;
-                if self.node_text(inner_prop) == "not" {
-                    (self.method_to_assertion_kind(method_name), true)
+                let inner_prop_name = self.node_text(inner_prop);
+                let inner_object = object.child_by_field_name("object")?;
+                if inner_prop_name == "not" {
+                    (
+                        self.method_to_assertion_kind(method_name),
+                        true,
+                        inner_object,
+                    )
+                } else if inner_prop_name == "resolves" || inner_prop_name == "rejects" {
+                    // expect(promise).resolves.toBe(x) or expect(promise).rejects.toThrow()
+                    (
+                        self.method_to_assertion_kind(method_name),
+                        false,
+                        inner_object,
+                    )
                 } else {
-                    (self.method_to_assertion_kind(method_name), false)
+                    (self.method_to_assertion_kind(method_name), false, object)
                 }
             } else {
-                (self.method_to_assertion_kind(method_name), false)
+                (self.method_to_assertion_kind(method_name), false, object)
             };
 
-            // Verify this is an expect() call
-            let expect_call = if is_negated {
-                object.child_by_field_name("object")?
-            } else {
-                object
-            };
-
+            // Verify expect_call is an expect() call
             if expect_call.kind() == "call_expression" {
                 let expect_fn = expect_call.child_by_field_name("function")?;
                 if self.node_text(expect_fn) == "expect" {
@@ -537,6 +544,32 @@ mod tests {
 
         assert_eq!(tests.len(), 1);
         assert!(tests[0].is_async);
+    }
+
+    #[test]
+    fn test_extract_resolves_rejects_assertions() {
+        let source = r#"
+            it('resolves without await', () => {
+                expect(Promise.resolve(42)).resolves.toBe(42);
+            });
+            it('rejects without await', () => {
+                expect(Promise.reject(new Error('fail'))).rejects.toThrow('fail');
+            });
+        "#;
+
+        let mut parser = TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let test_parser = TestFileParser::new(source);
+        let tests = test_parser.extract_tests(&tree);
+
+        assert_eq!(tests.len(), 2);
+        assert_eq!(tests[0].assertions.len(), 1);
+        assert_eq!(tests[1].assertions.len(), 1);
+        assert!(matches!(tests[0].assertions[0].kind, AssertionKind::ToBe));
+        assert!(matches!(
+            tests[1].assertions[0].kind,
+            AssertionKind::ToThrow
+        ));
     }
 
     #[test]

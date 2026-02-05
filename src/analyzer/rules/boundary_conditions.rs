@@ -129,7 +129,8 @@ impl BoundaryConditionsRule {
             unique.sort_by(|a, b| a.partial_cmp(b).unwrap());
             unique.dedup();
 
-            // If only 1 unique value and it's not an edge value, flag it
+            // If only 1 unique value and it's not an edge value, flag it.
+            // Use generic suggestion (no source here) — actual boundaries come from source code.
             if unique.len() == 1 && !edge_values.contains(&unique[0]) {
                 let val = unique[0] as i64;
                 let location = fn_location
@@ -142,21 +143,13 @@ impl BoundaryConditionsRule {
                     severity: Severity::Warning,
                     message: format!(
                         "'{}' is only tested with value {} — consider testing boundary values \
-                         (e.g., {}, {}, {})",
-                        fn_name,
-                        val,
-                        val - 1,
-                        val,
-                        val + 1
+                         (e.g. min, max, or thresholds from the source)",
+                        fn_name, val
                     ),
                     location,
-                    suggestion: Some(format!(
-                        "Add boundary tests: expect({}({})).toBe(expected); expect({}({})).toBe(expected)",
-                        fn_name,
-                        val - 1,
-                        fn_name,
-                        val + 1
-                    )),
+                    suggestion: Some(
+                        "Add boundary tests from source (e.g. expect(fn(threshold)).toBe(expected)). Consider testing min, max, and edge values.".to_string(),
+                    ),
                 });
             }
         }
@@ -194,6 +187,16 @@ impl AnalysisRule for BoundaryConditionsRule {
                             format!(" in '{}'", boundary.context)
                         };
 
+                        let (v_lo, v, v_hi) = (
+                            value.parse::<f64>().unwrap_or(0.0) - 1.0,
+                            value.clone(),
+                            value.parse::<f64>().unwrap_or(0.0) + 1.0,
+                        );
+                        let fn_placeholder = if boundary.context.is_empty() {
+                            "fn".to_string()
+                        } else {
+                            boundary.context.clone()
+                        };
                         issues.push(Issue {
                             rule: Rule::MissingBoundaryTest,
                             severity: Severity::Warning,
@@ -203,10 +206,8 @@ impl AnalysisRule for BoundaryConditionsRule {
                             ),
                             location: Location::new(1, 1),
                             suggestion: Some(format!(
-                                "Add tests: expect(fn({})).toBe(expected); expect(fn({})).toBe(expected); expect(fn({})).toBe(expected)",
-                                value.parse::<f64>().unwrap_or(0.0) - 1.0,
-                                value,
-                                value.parse::<f64>().unwrap_or(0.0) + 1.0
+                                "Add tests: expect({}({})).toBe(expected); expect({}({})).toBe(expected); expect({}({})).toBe(expected)",
+                                fn_placeholder, v_lo, fn_placeholder, v, fn_placeholder, v_hi
                             )),
                         });
                     }

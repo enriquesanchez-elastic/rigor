@@ -38,17 +38,17 @@ macro_rules! regression {
 regression!(
     assertion_intent_mismatch,
     "test-repos/fake-project/tests/assertion-intent-mismatch.test.ts",
-    55,
-    14
+    54,
+    15
 );
 regression!(
     async_missing_await,
     "test-repos/fake-project/tests/async-missing-await.test.ts",
-    57,
-    10
+    83,
+    7
 );
-regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 83, 10);
-regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 79, 6);
+regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 85, 9);
+regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 78, 7);
 regression!(
     debug_code,
     "test-repos/fake-project/tests/debug-code.test.ts",
@@ -61,24 +61,24 @@ regression!(
     74,
     4
 );
-regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 66, 19);
+regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 63, 22);
 regression!(
     hardcoded_limited_input,
     "test-repos/fake-project/tests/hardcoded-limited-input.test.ts",
-    80,
-    14
+    81,
+    13
 );
 regression!(
     missing_boundary_tests,
     "test-repos/fake-project/tests/missing-boundary-tests.test.ts",
-    87,
-    4
+    89,
+    3
 );
 regression!(
     missing_error_tests,
     "test-repos/fake-project/tests/missing-error-tests.test.ts",
-    85,
-    7
+    87,
+    6
 );
 regression!(
     mixed_bad,
@@ -95,8 +95,8 @@ regression!(
 regression!(
     mutation_resistant,
     "test-repos/fake-project/tests/mutation-resistant.test.ts",
-    88,
-    5
+    87,
+    6
 );
 regression!(
     no_assertions,
@@ -113,8 +113,8 @@ regression!(
 regression!(
     skipped_and_focused,
     "test-repos/fake-project/tests/skipped-and-focused.test.ts",
-    83,
-    10
+    53,
+    17
 );
 regression!(
     snapshot_only,
@@ -125,20 +125,20 @@ regression!(
 regression!(
     trivial_assertions,
     "test-repos/fake-project/tests/trivial-assertions.test.ts",
-    65,
-    13
+    49,
+    17
 );
 regression!(
     vague_names,
     "test-repos/fake-project/tests/vague-names.test.ts",
-    71,
+    62,
     12
 );
 regression!(
     weak_assertions,
     "test-repos/fake-project/tests/weak-assertions.test.ts",
-    51,
-    16
+    54,
+    15
 );
 
 // e2e/
@@ -151,13 +151,13 @@ regression!(
 regression!(
     flaky_playwright,
     "test-repos/fake-project/e2e/flaky-playwright.e2e.test.ts",
-    84,
-    9
+    85,
+    10
 );
 regression!(
     login_e2e,
     "test-repos/fake-project/e2e/login.e2e.test.ts",
-    81,
+    82,
     9
 );
 regression!(
@@ -171,7 +171,7 @@ regression!(
 regression!(
     vitest_math,
     "test-repos/fake-project/vitest/math.test.ts",
-    93,
+    91,
     3
 );
 
@@ -179,8 +179,8 @@ regression!(
 regression!(
     button_test,
     "test-repos/fake-project/src/components/Button.test.tsx",
-    79,
-    10
+    83,
+    9
 );
 regression!(
     button_bad_test,
@@ -191,6 +191,6 @@ regression!(
 regression!(
     validators_test,
     "test-repos/fake-project/src/__tests__/validators.test.ts",
-    45,
-    15
+    47,
+    14
 );

@@ -195,7 +195,8 @@ impl ConsoleReporter {
     }
 
     fn print_recommendations(&self, result: &AnalysisResult) {
-        let recs = ScoreCalculator::recommendations(&result.breakdown);
+        let recs =
+            ScoreCalculator::recommendations(&result.breakdown, &result.issues, result.score.grade);
 
         if result.score.value < 90 {
             println!("   {}", "Recommendations:".bold());
