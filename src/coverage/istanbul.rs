@@ -129,12 +129,12 @@ pub fn parse_istanbul_json(content: &str) -> anyhow::Result<CoverageReport> {
     // Istanbul JSON can be either:
     // 1. A map of file paths to coverage data: { "/path/to/file.ts": { ... }, ... }
     // 2. A c8/nyc summary format with "total" key
-    
+
     let raw: serde_json::Value = serde_json::from_str(content)
         .map_err(|e| anyhow::anyhow!("Failed to parse coverage JSON: {}", e))?;
-    
+
     let mut report = CoverageReport::default();
-    
+
     // Handle different formats
     if let Some(obj) = raw.as_object() {
         for (key, value) in obj {
@@ -142,18 +142,20 @@ pub fn parse_istanbul_json(content: &str) -> anyhow::Result<CoverageReport> {
             if key == "total" || key == "coverageMap" {
                 continue;
             }
-            
+
             // Try to parse as coverage data
             if let Ok(coverage_data) = serde_json::from_value::<CoverageData>(value.clone()) {
                 let file_coverage = process_coverage_data(&coverage_data);
-                report.files.insert(PathBuf::from(&coverage_data.path), file_coverage);
+                report
+                    .files
+                    .insert(PathBuf::from(&coverage_data.path), file_coverage);
             }
         }
     }
-    
+
     // Calculate overall summary
     report.summary = calculate_summary(&report.files);
-    
+
     Ok(report)
 }
 
@@ -163,7 +165,7 @@ fn process_coverage_data(data: &CoverageData) -> FileCoverage {
         path: PathBuf::from(&data.path),
         ..Default::default()
     };
-    
+
     // Process line coverage from statements
     for (stmt_id, &count) in &data.s {
         if let Some(loc) = data.statement_map.get(stmt_id) {
@@ -172,30 +174,33 @@ fn process_coverage_data(data: &CoverageData) -> FileCoverage {
             *entry = (*entry).max(count);
         }
     }
-    
+
     // Process function coverage
     for (fn_id, &count) in &data.f {
         if let Some(fn_info) = data.fn_map.get(fn_id) {
             coverage.functions.insert(fn_info.name.clone(), count);
         }
     }
-    
+
     // Process branch coverage
     for (branch_id, counts) in &data.b {
         if let Some(branch_info) = data.branch_map.get(branch_id) {
-            coverage.branches.insert(branch_id.clone(), BranchCoverage {
-                line: branch_info.loc.start.line,
-                coverage: counts.clone(),
-            });
+            coverage.branches.insert(
+                branch_id.clone(),
+                BranchCoverage {
+                    line: branch_info.loc.start.line,
+                    coverage: counts.clone(),
+                },
+            );
         }
     }
-    
+
     // Copy statement coverage
     coverage.statements = data.s.clone();
-    
+
     // Calculate summary for this file
     coverage.summary = calculate_file_summary(&coverage, data);
-    
+
     coverage
 }
 
@@ -203,31 +208,47 @@ fn process_coverage_data(data: &CoverageData) -> FileCoverage {
 fn calculate_file_summary(coverage: &FileCoverage, data: &CoverageData) -> CoverageSummary {
     let lines_total = coverage.lines.len() as u32;
     let lines_covered = coverage.lines.values().filter(|&&c| c > 0).count() as u32;
-    
+
     let stmts_total = data.s.len() as u32;
     let stmts_covered = data.s.values().filter(|&&c| c > 0).count() as u32;
-    
+
     let fns_total = data.f.len() as u32;
     let fns_covered = data.f.values().filter(|&&c| c > 0).count() as u32;
-    
+
     let mut branches_total = 0u32;
     let mut branches_covered = 0u32;
     for counts in data.b.values() {
         branches_total += counts.len() as u32;
         branches_covered += counts.iter().filter(|&&c| c > 0).count() as u32;
     }
-    
+
     CoverageSummary {
-        lines_pct: if lines_total > 0 { (lines_covered as f32 / lines_total as f32) * 100.0 } else { 100.0 },
+        lines_pct: if lines_total > 0 {
+            (lines_covered as f32 / lines_total as f32) * 100.0
+        } else {
+            100.0
+        },
         lines_covered,
         lines_total,
-        branches_pct: if branches_total > 0 { (branches_covered as f32 / branches_total as f32) * 100.0 } else { 100.0 },
+        branches_pct: if branches_total > 0 {
+            (branches_covered as f32 / branches_total as f32) * 100.0
+        } else {
+            100.0
+        },
         branches_covered,
         branches_total,
-        functions_pct: if fns_total > 0 { (fns_covered as f32 / fns_total as f32) * 100.0 } else { 100.0 },
+        functions_pct: if fns_total > 0 {
+            (fns_covered as f32 / fns_total as f32) * 100.0
+        } else {
+            100.0
+        },
         functions_covered: fns_covered,
         functions_total: fns_total,
-        statements_pct: if stmts_total > 0 { (stmts_covered as f32 / stmts_total as f32) * 100.0 } else { 100.0 },
+        statements_pct: if stmts_total > 0 {
+            (stmts_covered as f32 / stmts_total as f32) * 100.0
+        } else {
+            100.0
+        },
         statements_covered: stmts_covered,
         statements_total: stmts_total,
     }
@@ -236,7 +257,7 @@ fn calculate_file_summary(coverage: &FileCoverage, data: &CoverageData) -> Cover
 /// Calculate overall summary from all file coverages
 fn calculate_summary(files: &HashMap<PathBuf, FileCoverage>) -> CoverageSummary {
     let mut total = CoverageSummary::default();
-    
+
     for fc in files.values() {
         total.lines_total += fc.summary.lines_total;
         total.lines_covered += fc.summary.lines_covered;
@@ -247,21 +268,37 @@ fn calculate_summary(files: &HashMap<PathBuf, FileCoverage>) -> CoverageSummary 
         total.statements_total += fc.summary.statements_total;
         total.statements_covered += fc.summary.statements_covered;
     }
-    
-    total.lines_pct = if total.lines_total > 0 { (total.lines_covered as f32 / total.lines_total as f32) * 100.0 } else { 100.0 };
-    total.branches_pct = if total.branches_total > 0 { (total.branches_covered as f32 / total.branches_total as f32) * 100.0 } else { 100.0 };
-    total.functions_pct = if total.functions_total > 0 { (total.functions_covered as f32 / total.functions_total as f32) * 100.0 } else { 100.0 };
-    total.statements_pct = if total.statements_total > 0 { (total.statements_covered as f32 / total.statements_total as f32) * 100.0 } else { 100.0 };
-    
+
+    total.lines_pct = if total.lines_total > 0 {
+        (total.lines_covered as f32 / total.lines_total as f32) * 100.0
+    } else {
+        100.0
+    };
+    total.branches_pct = if total.branches_total > 0 {
+        (total.branches_covered as f32 / total.branches_total as f32) * 100.0
+    } else {
+        100.0
+    };
+    total.functions_pct = if total.functions_total > 0 {
+        (total.functions_covered as f32 / total.functions_total as f32) * 100.0
+    } else {
+        100.0
+    };
+    total.statements_pct = if total.statements_total > 0 {
+        (total.statements_covered as f32 / total.statements_total as f32) * 100.0
+    } else {
+        100.0
+    };
+
     total
 }
 
 impl FileCoverage {
     /// Check if a specific line is covered
     pub fn is_line_covered(&self, line: u32) -> bool {
-        self.lines.get(&line).map_or(false, |&c| c > 0)
+        self.lines.get(&line).is_some_and(|&c| c > 0)
     }
-    
+
     /// Get uncovered lines
     pub fn uncovered_lines(&self) -> Vec<u32> {
         self.lines
@@ -270,7 +307,7 @@ impl FileCoverage {
             .map(|(&line, _)| line)
             .collect()
     }
-    
+
     /// Get uncovered functions
     pub fn uncovered_functions(&self) -> Vec<&str> {
         self.functions
@@ -288,7 +325,7 @@ impl CoverageReport {
         if let Some(fc) = self.files.get(path) {
             return Some(fc);
         }
-        
+
         // Try matching by file name
         let file_name = path.file_name()?;
         for (p, fc) in &self.files {
@@ -296,7 +333,7 @@ impl CoverageReport {
                 return Some(fc);
             }
         }
-        
+
         None
     }
 }
@@ -323,15 +360,15 @@ mod tests {
                 "b": {}
             }
         }"#;
-        
+
         let report = parse_istanbul_json(json).unwrap();
         assert_eq!(report.files.len(), 1);
-        
+
         let file = report.files.get(&PathBuf::from("/src/utils.ts")).unwrap();
         assert_eq!(file.summary.functions_covered, 1);
         assert_eq!(file.summary.functions_total, 1);
     }
-    
+
     #[test]
     fn test_uncovered_detection() {
         let mut coverage = FileCoverage::default();
@@ -339,7 +376,7 @@ mod tests {
         coverage.lines.insert(2, 0);
         coverage.lines.insert(3, 3);
         coverage.lines.insert(4, 0);
-        
+
         let uncovered = coverage.uncovered_lines();
         assert!(uncovered.contains(&2));
         assert!(uncovered.contains(&4));

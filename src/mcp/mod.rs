@@ -3,8 +3,8 @@
 //! Exposes tools: analyze_test_quality, suggest_improvements, get_mutation_score.
 
 use crate::analyzer::AnalysisEngine;
-use crate::suggestions::AiSuggestionGenerator;
 use crate::mutation;
+use crate::suggestions::AiSuggestionGenerator;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -116,17 +116,25 @@ pub fn run_mcp_server() -> anyhow::Result<()> {
                 Some(serde_json::json!({ "tools": tools }))
             }
             "tools/call" => {
-                let (name, args_obj) = req.params
+                let (name, args_obj) = req
+                    .params
                     .as_ref()
                     .and_then(|p| p.get("params").or(Some(p)))
-                    .and_then(|p| {
+                    .map(|p| {
                         let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                        let args = p.get("arguments").cloned().unwrap_or(serde_json::Value::Null);
+                        let args = p
+                            .get("arguments")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
                         let obj = args.as_object().cloned().unwrap_or_default();
-                        Some((name, obj))
+                        (name, obj)
                     })
                     .unwrap_or(("", serde_json::Map::new()));
-                let file = args_obj.get("file").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let file = args_obj
+                    .get("file")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let count = args_obj.get("count").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
 
                 let result = match name {

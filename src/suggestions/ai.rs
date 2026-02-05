@@ -16,7 +16,7 @@ pub struct AiSuggestionGenerator {
 impl AiSuggestionGenerator {
     /// Create a new AI suggestion generator
     pub fn new() -> Self {
-        Self { 
+        Self {
             detailed: true,
             mutation_result: None,
         }
@@ -27,7 +27,7 @@ impl AiSuggestionGenerator {
         self.detailed = detailed;
         self
     }
-    
+
     /// Add mutation testing results to enhance the prompt
     pub fn with_mutation_result(mut self, result: MutationResult) -> Self {
         self.mutation_result = Some(result);
@@ -119,17 +119,17 @@ The code should be complete and runnable.
 
         prompt
     }
-    
+
     /// Format mutation testing results for inclusion in the prompt
     fn format_mutation_results(&self) -> String {
         let Some(ref mutation) = self.mutation_result else {
             return String::new();
         };
-        
+
         if mutation.total == 0 {
             return String::new();
         }
-        
+
         let score = mutation.score() as u32;
         let mut output = format!(
             r#"
@@ -139,12 +139,10 @@ The code should be complete and runnable.
 "#,
             score, mutation.killed, mutation.total
         );
-        
+
         // List survived mutants (these are opportunities for better tests)
-        let survivors: Vec<_> = mutation.details.iter()
-            .filter(|r| !r.killed)
-            .collect();
-        
+        let survivors: Vec<_> = mutation.details.iter().filter(|r| !r.killed).collect();
+
         if !survivors.is_empty() {
             output.push_str("### Survived Mutants (Tests didn't catch these changes)\n");
             for (i, run) in survivors.iter().take(10).enumerate() {
@@ -162,27 +160,25 @@ The code should be complete and runnable.
             }
             output.push('\n');
         }
-        
+
         output
     }
-    
+
     /// Format mutation-specific fix suggestions
     fn format_mutation_fixes(&self) -> String {
         let Some(ref mutation) = self.mutation_result else {
             return String::new();
         };
-        
-        let survivors: Vec<_> = mutation.details.iter()
-            .filter(|r| !r.killed)
-            .collect();
-        
+
+        let survivors: Vec<_> = mutation.details.iter().filter(|r| !r.killed).collect();
+
         if survivors.is_empty() {
             return String::new();
         }
-        
+
         let mut output = String::from("\n### Priority 0: Kill Survived Mutants\n");
         output.push_str("The following source code changes were NOT detected by tests. Add assertions that would fail if these mutations were applied:\n\n");
-        
+
         for run in survivors.iter().take(5) {
             let suggestion = Self::suggest_fix_for_mutation(run);
             output.push_str(&format!(
@@ -193,43 +189,49 @@ The code should be complete and runnable.
                 suggestion
             ));
         }
-        
+
         output.push('\n');
         output
     }
-    
+
     /// Suggest a fix for a specific survived mutation
     fn suggest_fix_for_mutation(run: &crate::mutation::MutationRun) -> String {
         let desc = run.mutation.description.to_lowercase();
-        
-        if desc.contains(">=") || desc.contains("<=") || desc.contains("> to") || desc.contains("< to") {
+
+        if desc.contains(">=")
+            || desc.contains("<=")
+            || desc.contains("> to")
+            || desc.contains("< to")
+        {
             return "→ Add boundary value test: test with the exact boundary value (e.g., if `x >= 5`, test with `x = 5` and `x = 4`)".to_string();
         }
-        
+
         if desc.contains("true") || desc.contains("false") {
-            return "→ Add boolean assertion: verify the exact boolean value, not just truthiness".to_string();
+            return "→ Add boolean assertion: verify the exact boolean value, not just truthiness"
+                .to_string();
         }
-        
+
         if desc.contains("+") || desc.contains("-") || desc.contains("*") || desc.contains("/") {
             return "→ Add arithmetic verification: test with specific input values that would produce different results with the mutation".to_string();
         }
-        
+
         if desc.contains("string") || desc.contains("empty") {
             return "→ Add string content assertion: verify the exact string value, not just that it exists".to_string();
         }
-        
+
         if desc.contains("return") {
             return "→ Add return value assertion: verify the specific return value, not just that it's defined".to_string();
         }
-        
+
         if desc.contains("optional chaining") || desc.contains("?.") {
-            return "→ Add null safety test: verify behavior when the value is null/undefined".to_string();
+            return "→ Add null safety test: verify behavior when the value is null/undefined"
+                .to_string();
         }
-        
+
         if desc.contains("nullish") || desc.contains("??") {
             return "→ Test nullish coalescing: verify correct handling of null vs falsy values (0, '', false)".to_string();
         }
-        
+
         "→ Add specific assertion that would fail if this mutation was applied".to_string()
     }
 
@@ -259,7 +261,10 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
             issue.rule,
             issue.location.line,
             issue.message,
-            issue.suggestion.as_deref().unwrap_or("See issue description"),
+            issue
+                .suggestion
+                .as_deref()
+                .unwrap_or("See issue description"),
             context_lines,
         )
     }
@@ -274,7 +279,10 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
 
         // Detect functions that throw errors
         if source_content.contains("throw ") || source_content.contains("throw new") {
-            let has_error_test = result.issues.iter().all(|i| i.rule != Rule::MissingErrorTest);
+            let has_error_test = result
+                .issues
+                .iter()
+                .all(|i| i.rule != Rule::MissingErrorTest);
             if !has_error_test {
                 hints.push("- **Error paths detected**: Add tests using `expect(() => fn()).toThrow(ErrorType)`".to_string());
             }
@@ -286,38 +294,60 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
         }
 
         // Detect conditional logic
-        let conditionals = source_content.matches(" if ").count() + source_content.matches(" if(").count();
+        let conditionals =
+            source_content.matches(" if ").count() + source_content.matches(" if(").count();
         if conditionals > 2 {
-            hints.push(format!("- **{} conditionals detected**: Add tests for each branch (true/false paths)", conditionals));
+            hints.push(format!(
+                "- **{} conditionals detected**: Add tests for each branch (true/false paths)",
+                conditionals
+            ));
         }
 
         // Detect numeric comparisons (boundary conditions)
-        if source_content.contains(">=") || source_content.contains("<=") 
-            || source_content.contains(" > ") || source_content.contains(" < ") {
+        if source_content.contains(">=")
+            || source_content.contains("<=")
+            || source_content.contains(" > ")
+            || source_content.contains(" < ")
+        {
             hints.push("- **Numeric comparisons detected**: Add boundary value tests (value-1, value, value+1)".to_string());
         }
 
         // Detect array/collection operations
-        if source_content.contains(".map(") || source_content.contains(".filter(") 
-            || source_content.contains(".reduce(") || source_content.contains(".forEach(") {
+        if source_content.contains(".map(")
+            || source_content.contains(".filter(")
+            || source_content.contains(".reduce(")
+            || source_content.contains(".forEach(")
+        {
             hints.push("- **Array operations detected**: Test with empty arrays, single item, and multiple items".to_string());
         }
 
         // Detect null/undefined checks
-        if source_content.contains("=== null") || source_content.contains("=== undefined")
-            || source_content.contains("!= null") || source_content.contains("!= undefined") {
-            hints.push("- **Null checks detected**: Add tests with null/undefined inputs".to_string());
+        if source_content.contains("=== null")
+            || source_content.contains("=== undefined")
+            || source_content.contains("!= null")
+            || source_content.contains("!= undefined")
+        {
+            hints.push(
+                "- **Null checks detected**: Add tests with null/undefined inputs".to_string(),
+            );
         }
 
         // Detect regex patterns
-        if source_content.contains("RegExp") || source_content.contains(".match(") 
-            || source_content.contains(".test(") {
-            hints.push("- **Regex detected**: Test with matching, non-matching, and edge case inputs".to_string());
+        if source_content.contains("RegExp")
+            || source_content.contains(".match(")
+            || source_content.contains(".test(")
+        {
+            hints.push(
+                "- **Regex detected**: Test with matching, non-matching, and edge case inputs"
+                    .to_string(),
+            );
         }
 
         // Detect external API calls
-        if source_content.contains("fetch(") || source_content.contains("axios") 
-            || source_content.contains("http.") {
+        if source_content.contains("fetch(")
+            || source_content.contains("axios")
+            || source_content.contains("http.")
+        {
             hints.push("- **External API calls detected**: Mock these calls and test success/failure scenarios".to_string());
         }
 
@@ -325,7 +355,11 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
     }
 
     /// Generate a prompt and save it to a file
-    pub fn generate_prompt_file(&self, result: &AnalysisResult, output_path: &Path) -> std::io::Result<()> {
+    pub fn generate_prompt_file(
+        &self,
+        result: &AnalysisResult,
+        output_path: &Path,
+    ) -> std::io::Result<()> {
         let prompt = self.generate_prompt(result);
         fs::write(output_path, prompt)
     }
@@ -338,9 +372,18 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
         let mut output = String::new();
 
         // Group by severity
-        let errors: Vec<_> = issues.iter().filter(|i| i.severity == Severity::Error).collect();
-        let warnings: Vec<_> = issues.iter().filter(|i| i.severity == Severity::Warning).collect();
-        let infos: Vec<_> = issues.iter().filter(|i| i.severity == Severity::Info).collect();
+        let errors: Vec<_> = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Error)
+            .collect();
+        let warnings: Vec<_> = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
+            .collect();
+        let infos: Vec<_> = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Info)
+            .collect();
 
         if !errors.is_empty() {
             output.push_str("### ❌ Errors (Must Fix)\n");
@@ -424,8 +467,11 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
     fn format_critical_fixes(&self, issues: &[Issue]) -> String {
         let critical: Vec<_> = issues
             .iter()
-            .filter(|i| i.severity == Severity::Error || 
-                   (i.severity == Severity::Warning && matches!(i.rule, Rule::NoAssertions | Rule::WeakAssertion)))
+            .filter(|i| {
+                i.severity == Severity::Error
+                    || (i.severity == Severity::Warning
+                        && matches!(i.rule, Rule::NoAssertions | Rule::WeakAssertion))
+            })
             .collect();
 
         if critical.is_empty() {
@@ -447,10 +493,12 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
     fn format_missing_tests(&self, issues: &[Issue]) -> String {
         let missing: Vec<_> = issues
             .iter()
-            .filter(|i| matches!(i.rule, 
-                Rule::MissingErrorTest | 
-                Rule::MissingBoundaryTest | 
-                Rule::LimitedInputVariety))
+            .filter(|i| {
+                matches!(
+                    i.rule,
+                    Rule::MissingErrorTest | Rule::MissingBoundaryTest | Rule::LimitedInputVariety
+                )
+            })
             .collect();
 
         if missing.is_empty() {

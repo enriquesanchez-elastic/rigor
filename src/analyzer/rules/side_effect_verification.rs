@@ -13,12 +13,18 @@ fn test_location_for_function(tests: &[TestCase], fn_name: &str) -> Location {
     let fn_lower = fn_name.to_lowercase();
     for test in tests {
         if test.name.to_lowercase().contains(&fn_lower)
-            || test.assertions.iter().any(|a| a.raw.to_lowercase().contains(&fn_lower))
+            || test
+                .assertions
+                .iter()
+                .any(|a| a.raw.to_lowercase().contains(&fn_lower))
         {
             return test.location.clone();
         }
     }
-    tests.first().map(|t| t.location.clone()).unwrap_or_else(|| Location::new(1, 1))
+    tests
+        .first()
+        .map(|t| t.location.clone())
+        .unwrap_or_else(|| Location::new(1, 1))
 }
 
 /// Rule for analyzing whether tests verify side effects
@@ -82,8 +88,12 @@ impl SideEffectVerificationRule {
             MutationKind::ArrayPush => "expect(mutatedArray).toContain(addedItem)",
             MutationKind::ArrayPop => "expect(array).toHaveLength(n - 1)",
             MutationKind::ArraySplice => "expect(array).toHaveLength(...) or toContain(...)",
-            MutationKind::ArraySort | MutationKind::ArrayReverse => "expect(array).toEqual([...expectedOrder])",
-            MutationKind::ArrayShift | MutationKind::ArrayUnshift => "expect(array).toHaveLength(...)",
+            MutationKind::ArraySort | MutationKind::ArrayReverse => {
+                "expect(array).toEqual([...expectedOrder])"
+            }
+            MutationKind::ArrayShift | MutationKind::ArrayUnshift => {
+                "expect(array).toHaveLength(...)"
+            }
             MutationKind::PropertyAssign | MutationKind::VariableAssign => {
                 "expect(obj.prop).toBe(expected) or toEqual(...)"
             }

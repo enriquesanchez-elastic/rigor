@@ -14,7 +14,10 @@ fn test_location_for_function(tests: &[TestCase], fn_name: &str) -> Location {
     let fn_lower = fn_name.to_lowercase();
     for test in tests {
         let name_has = test.name.to_lowercase().contains(&fn_lower);
-        let assertions_mention = test.assertions.iter().any(|a| a.raw.to_lowercase().contains(&fn_lower));
+        let assertions_mention = test
+            .assertions
+            .iter()
+            .any(|a| a.raw.to_lowercase().contains(&fn_lower));
         if name_has || assertions_mention {
             return test.location.clone();
         }
@@ -47,7 +50,12 @@ impl ReturnPathCoverageRule {
     }
 
     /// Estimate how many return paths are likely covered by tests based on test names and assertion content
-    fn estimate_covered_paths(&self, fn_name: &str, tests: &[TestCase], test_source: &str) -> usize {
+    fn estimate_covered_paths(
+        &self,
+        fn_name: &str,
+        tests: &[TestCase],
+        test_source: &str,
+    ) -> usize {
         let fn_lower = fn_name.to_lowercase();
         let source_lower = test_source.to_lowercase();
         let mut path_hints = HashSet::new();
@@ -61,20 +69,35 @@ impl ReturnPathCoverageRule {
             let relevant = name_lower.contains(&fn_lower)
                 || name_lower.contains("process")
                 || name_lower.contains("handle")
-                || test.assertions.iter().any(|a| a.raw.to_lowercase().contains(&fn_lower));
+                || test
+                    .assertions
+                    .iter()
+                    .any(|a| a.raw.to_lowercase().contains(&fn_lower));
             if !relevant {
                 continue;
             }
-            if name_lower.contains("zero") || name_lower.contains(" 0 ") || name_lower.contains("(0)") {
+            if name_lower.contains("zero")
+                || name_lower.contains(" 0 ")
+                || name_lower.contains("(0)")
+            {
                 path_hints.insert("zero");
             }
-            if name_lower.contains("negative") || name_lower.contains("invalid") || name_lower.contains("error") {
+            if name_lower.contains("negative")
+                || name_lower.contains("invalid")
+                || name_lower.contains("error")
+            {
                 path_hints.insert("negative");
             }
-            if name_lower.contains("positive") || name_lower.contains("valid") || name_lower.contains("success") {
+            if name_lower.contains("positive")
+                || name_lower.contains("valid")
+                || name_lower.contains("success")
+            {
                 path_hints.insert("positive");
             }
-            if name_lower.contains("empty") || name_lower.contains("null") || name_lower.contains("undefined") {
+            if name_lower.contains("empty")
+                || name_lower.contains("null")
+                || name_lower.contains("undefined")
+            {
                 path_hints.insert("empty");
             }
             if name_lower.contains("boundary") || name_lower.contains("edge") {
@@ -83,7 +106,11 @@ impl ReturnPathCoverageRule {
             // Literal 0 or negative in assertions suggests that path is tested
             for a in &test.assertions {
                 let raw = a.raw.to_lowercase();
-                if raw.contains("(0)") || raw.contains(", 0)") || raw.contains("=== 0") || raw.contains("=== -0") {
+                if raw.contains("(0)")
+                    || raw.contains(", 0)")
+                    || raw.contains("=== 0")
+                    || raw.contains("=== -0")
+                {
                     path_hints.insert("zero");
                 }
                 if raw.contains("-1") || raw.contains("negative") || raw.contains("< 0") {
@@ -175,7 +202,10 @@ impl AnalysisRule for ReturnPathCoverageRule {
     }
 
     fn calculate_score(&self, _tests: &[TestCase], issues: &[Issue]) -> u8 {
-        let path_issues = issues.iter().filter(|i| i.rule == Rule::ReturnPathCoverage).count();
+        let path_issues = issues
+            .iter()
+            .filter(|i| i.rule == Rule::ReturnPathCoverage)
+            .count();
         let deduction = (path_issues as i32 * 5).min(25);
         (25 - deduction).max(0) as u8
     }

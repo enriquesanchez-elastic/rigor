@@ -110,17 +110,17 @@ pub fn run_batch_mutation_test(
             })
             .collect()
     };
-    
+
     let total_mutants: usize = results.iter().map(|r| r.total).sum();
     let total_killed: usize = results.iter().map(|r| r.killed).sum();
     let total_survived = total_mutants - total_killed;
-    
+
     let overall_score = if total_mutants == 0 {
         100.0
     } else {
         (total_killed as f32 / total_mutants as f32) * 100.0
     };
-    
+
     Ok(BatchMutationResult {
         source_results: results,
         overall_score,

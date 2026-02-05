@@ -32,10 +32,7 @@ impl TypeScriptParser {
 
     /// Create a parser based on file extension
     pub fn for_file(path: &Path) -> Result<Self> {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         match ext {
             "tsx" => Self::new_tsx(),

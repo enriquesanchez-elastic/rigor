@@ -75,8 +75,7 @@ impl AnalysisRule for ErrorCoverageRule {
         let mut issues = Vec::new();
 
         // If we have source file, analyze throwable functions
-        if let (Some(source_content), Some(source_tree)) =
-            (&self.source_content, &self.source_tree)
+        if let (Some(source_content), Some(source_tree)) = (&self.source_content, &self.source_tree)
         {
             let parser = SourceFileParser::new(source_content);
             let throwables = parser.extract_throwable_functions(source_tree);
@@ -238,8 +237,6 @@ mod tests {
         let issues = rule.analyze(&tests, "", &tree);
 
         assert!(!issues.is_empty());
-        assert!(issues
-            .iter()
-            .any(|i| i.message.contains("error handling")));
+        assert!(issues.iter().any(|i| i.message.contains("error handling")));
     }
 }

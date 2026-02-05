@@ -123,12 +123,12 @@ impl<'a> FrameworkDetector<'a> {
     fn node_text(&self, node: Node) -> &str {
         node.utf8_text(self.source.as_bytes()).unwrap_or("")
     }
-    
+
     /// Detect the test type based on file path, framework, and content
     pub fn detect_test_type(&self, file_path: &Path, framework: TestFramework) -> TestType {
         let path_str = file_path.to_string_lossy().to_lowercase();
         let source_lower = self.source.to_lowercase();
-        
+
         // Check file path patterns first (most reliable)
         if path_str.contains("e2e") || path_str.contains(".e2e.") || path_str.contains("/e2e/") {
             return TestType::E2e;
@@ -142,14 +142,17 @@ impl<'a> FrameworkDetector<'a> {
         if path_str.contains("component") || path_str.contains(".component.") {
             return TestType::Component;
         }
-        
+
         // Check framework (E2E frameworks)
-        if matches!(framework, TestFramework::Cypress | TestFramework::Playwright) {
+        if matches!(
+            framework,
+            TestFramework::Cypress | TestFramework::Playwright
+        ) {
             return TestType::E2e;
         }
-        
+
         // Check content patterns for component tests
-        if source_lower.contains("@testing-library") 
+        if source_lower.contains("@testing-library")
             || source_lower.contains("render(")
             || source_lower.contains("screen.get")
             || source_lower.contains("fireEvent")
@@ -157,7 +160,7 @@ impl<'a> FrameworkDetector<'a> {
         {
             return TestType::Component;
         }
-        
+
         // Check for Cypress/E2E patterns in content
         if source_lower.contains("cy.visit")
             || source_lower.contains("cy.get")
@@ -166,7 +169,7 @@ impl<'a> FrameworkDetector<'a> {
         {
             return TestType::E2e;
         }
-        
+
         // Check for integration test patterns
         if source_lower.contains("supertest")
             || source_lower.contains("request(app)")
@@ -176,7 +179,7 @@ impl<'a> FrameworkDetector<'a> {
         {
             return TestType::Integration;
         }
-        
+
         // Default to unit test
         TestType::Unit
     }

@@ -207,7 +207,9 @@ impl Config {
         for pattern in patterns {
             if let Ok(glob) = globset::Glob::new(pattern) {
                 let matcher = glob.compile_matcher();
-                if matcher.is_match(file_path) || path_str.contains(pattern.trim_start_matches("**/")) {
+                if matcher.is_match(file_path)
+                    || path_str.contains(pattern.trim_start_matches("**/"))
+                {
                     return true;
                 }
             }
@@ -235,7 +237,7 @@ impl Config {
 
         // Merge ignore patterns
         let mut all_ignores = base.ignore;
-        all_ignores.extend(self.ignore.drain(..));
+        all_ignores.append(&mut self.ignore);
         self.ignore = all_ignores;
 
         // Merge test patterns
@@ -259,12 +261,15 @@ impl Config {
             self.source_mapping.test_root = base.source_mapping.test_root;
         }
         for (pattern, target) in base.source_mapping.mappings {
-            self.source_mapping.mappings.entry(pattern).or_insert(target);
+            self.source_mapping
+                .mappings
+                .entry(pattern)
+                .or_insert(target);
         }
 
         // Prepend base overrides
         let mut all_overrides = base.overrides;
-        all_overrides.extend(self.overrides.drain(..));
+        all_overrides.append(&mut self.overrides);
         self.overrides = all_overrides;
     }
 

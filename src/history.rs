@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 const HISTORY_FILENAME: &str = ".rigor-history.json";
 const MAX_RUNS: usize = 50;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct HistoryFile {
     pub runs: Vec<HistoryRun>,
 }
@@ -26,12 +26,6 @@ pub struct HistoryRun {
 pub struct FileScore {
     pub score: u8,
     pub issues: usize,
-}
-
-impl Default for HistoryFile {
-    fn default() -> Self {
-        Self { runs: Vec::new() }
-    }
 }
 
 /// Find project root (directory containing .rigor-history.json or first dir with package.json / .git)
@@ -79,11 +73,7 @@ pub fn previous_score(history: &HistoryFile, file_path: &Path) -> Option<u8> {
 }
 
 /// Build a new run from analysis results and append to history
-pub fn append_run(
-    history: &mut HistoryFile,
-    results: &[AnalysisResult],
-    commit: Option<String>,
-) {
+pub fn append_run(history: &mut HistoryFile, results: &[AnalysisResult], commit: Option<String>) {
     let timestamp = chrono::Utc::now().to_rfc3339();
     let mut files = HashMap::new();
     for r in results {

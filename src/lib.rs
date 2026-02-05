@@ -332,7 +332,7 @@ impl ScoringWeights {
             TestType::E2e => Self {
                 assertion_quality: 35,
                 error_coverage: 15,
-                boundary_conditions: 5,   // E2E tests don't need boundary testing
+                boundary_conditions: 5, // E2E tests don't need boundary testing
                 test_isolation: 25,
                 input_variety: 20,
             },
@@ -352,17 +352,16 @@ impl ScoringWeights {
             },
         }
     }
-    
+
     /// Calculate total score with these weights
     pub fn calculate_total(&self, breakdown: &ScoreBreakdown) -> u8 {
         // Each category score is 0-25, we normalize by the weight
-        let weighted_sum = 
-            (breakdown.assertion_quality as u32 * self.assertion_quality as u32) +
-            (breakdown.error_coverage as u32 * self.error_coverage as u32) +
-            (breakdown.boundary_conditions as u32 * self.boundary_conditions as u32) +
-            (breakdown.test_isolation as u32 * self.test_isolation as u32) +
-            (breakdown.input_variety as u32 * self.input_variety as u32);
-        
+        let weighted_sum = (breakdown.assertion_quality as u32 * self.assertion_quality as u32)
+            + (breakdown.error_coverage as u32 * self.error_coverage as u32)
+            + (breakdown.boundary_conditions as u32 * self.boundary_conditions as u32)
+            + (breakdown.test_isolation as u32 * self.test_isolation as u32)
+            + (breakdown.input_variety as u32 * self.input_variety as u32);
+
         // Normalize: max raw = 25 * 100 = 2500, we want 0-100
         // weighted_sum / 25 = percentage score
         ((weighted_sum / 25) as u8).min(100)

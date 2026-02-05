@@ -18,14 +18,21 @@ pub fn report(result: &MutationResult) {
     println!();
     println!("{}", "Mutation testing".bold());
     println!("   Source: {}", result.source_path.display());
-    println!("   Mutants: {} total, {} killed, {} survived", total, killed, survived);
+    println!(
+        "   Mutants: {} total, {} killed, {} survived",
+        total, killed, survived
+    );
     println!("   Score: {}%", pct);
 
     if !result.details.is_empty() {
         println!();
         println!("   {}", "Details:".bold());
         for run in &result.details {
-            let status = if run.killed { "KILLED".green() } else { "SURVIVED".red() };
+            let status = if run.killed {
+                "KILLED".green()
+            } else {
+                "SURVIVED".red()
+            };
             println!(
                 "   {} L{}:{} {} → {}",
                 status,
@@ -73,12 +80,14 @@ pub fn report_batch(result: &BatchMutationResult) {
     println!("   Total mutants: {}", result.total_mutants);
     println!(
         "   Killed: {} ({}%), Survived: {}",
-        result.total_killed,
-        result.overall_score as u32,
-        result.total_survived
+        result.total_killed, result.overall_score as u32, result.total_survived
     );
-    println!("   {}: {:.1}%", "Overall Score".bold(), result.overall_score);
-    
+    println!(
+        "   {}: {:.1}%",
+        "Overall Score".bold(),
+        result.overall_score
+    );
+
     // Per-file breakdown
     if !result.source_results.is_empty() {
         println!();
@@ -101,27 +110,30 @@ pub fn report_batch(result: &BatchMutationResult) {
             );
         }
     }
-    
+
     // Find worst performing files
-    let mut files_with_survivors: Vec<_> = result.source_results
+    let mut files_with_survivors: Vec<_> = result
+        .source_results
         .iter()
         .filter(|r| r.survived > 0)
         .collect();
     files_with_survivors.sort_by(|a, b| b.survived.cmp(&a.survived));
-    
+
     if !files_with_survivors.is_empty() {
         println!();
         println!("   {}", "Files needing attention:".bold());
         for file_result in files_with_survivors.iter().take(5) {
             println!(
                 "   • {} - {} survivors",
-                file_result.source_path.file_name()
+                file_result
+                    .source_path
+                    .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "?".to_string()),
                 file_result.survived
             );
         }
     }
-    
+
     println!();
 }

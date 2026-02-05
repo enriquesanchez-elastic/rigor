@@ -37,15 +37,24 @@ impl ScoreCalculator {
     /// Errors and warnings (trivial assertions, debug code, flaky patterns, etc.)
     /// now directly reduce the final score.
     pub fn apply_issue_penalty(score: Score, issues: &[Issue]) -> Score {
-        let errors = issues.iter().filter(|i| i.severity == Severity::Error).count() as i32;
-        let warnings = issues.iter().filter(|i| i.severity == Severity::Warning).count() as i32;
-        let infos = issues.iter().filter(|i| i.severity == Severity::Info).count() as i32;
+        let errors = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Error)
+            .count() as i32;
+        let warnings = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
+            .count() as i32;
+        let infos = issues
+            .iter()
+            .filter(|i| i.severity == Severity::Info)
+            .count() as i32;
 
         let penalty = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS)
             + (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS)
             + (infos * PENALTY_PER_INFO).min(MAX_PENALTY_FROM_INFO);
 
-        let value = (score.value as i32 - penalty).max(0).min(100) as u8;
+        let value = (score.value as i32 - penalty).clamp(0, 100) as u8;
         Score::new(value)
     }
 
@@ -103,13 +112,13 @@ impl ScoreCalculator {
         }
 
         if breakdown.test_isolation < 15 {
-            recs.push(
-                "Ensure tests are isolated - use beforeEach to reset state".to_string(),
-            );
+            recs.push("Ensure tests are isolated - use beforeEach to reset state".to_string());
         }
 
         if breakdown.input_variety < 15 {
-            recs.push("Vary test inputs - include edge cases like null, empty, negative".to_string());
+            recs.push(
+                "Vary test inputs - include edge cases like null, empty, negative".to_string(),
+            );
         }
 
         if recs.is_empty() {

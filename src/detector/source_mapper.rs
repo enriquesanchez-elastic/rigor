@@ -172,7 +172,7 @@ impl SourceMapper {
 
         // Fallback: try direct substitution at project root
         let source_dir = project_root.join(source_base.trim_start_matches('/'));
-        if let Some(relative) = test_path.strip_prefix(&project_root).ok() {
+        if let Ok(relative) = test_path.strip_prefix(&project_root) {
             let relative_dir = relative.parent()?;
             // Try to find in source_dir with same relative structure
             let candidate_dir = source_dir.join(
@@ -263,11 +263,7 @@ impl SourceMapper {
             .map(|r| project_root.join(r))
             .unwrap_or_else(|| project_root.join("src"));
 
-        let test_root = self
-            .config
-            .test_root
-            .as_ref()
-            .map(|r| project_root.join(r));
+        let test_root = self.config.test_root.as_ref().map(|r| project_root.join(r));
 
         // Calculate relative path from test root
         let relative = if let Some(ref test_root) = test_root {
@@ -309,6 +305,7 @@ impl SourceMapper {
     }
 
     /// Auto-detection strategies for finding source files
+    #[allow(clippy::type_complexity)]
     fn try_auto_strategies(&self, test_path: &Path, source_name: &str) -> Option<PathBuf> {
         let strategies: Vec<Box<dyn Fn(&Path, &str, &SourceMapper) -> Option<PathBuf>>> = vec![
             // 1. Adjacent file in same directory
@@ -394,17 +391,20 @@ impl SourceMapper {
                 let components: Vec<_> = relative.components().collect();
 
                 // Look for patterns like packages/foo/tests/bar.test.ts
-                for i in 0..components.len() {
-                    let component = components[i].as_os_str().to_str()?;
-                    if component == "tests" || component == "__tests__" || component == "test" {
+                for (i, component) in components.iter().enumerate() {
+                    let component_str = component.as_os_str().to_str()?;
+                    if component_str == "tests"
+                        || component_str == "__tests__"
+                        || component_str == "test"
+                    {
                         // Reconstruct path with src instead of tests
                         let mut new_path = project_root.clone();
-                        for j in 0..i {
-                            new_path = new_path.join(components[j].as_os_str());
+                        for c in components.iter().take(i) {
+                            new_path = new_path.join(c.as_os_str());
                         }
                         new_path = new_path.join("src");
-                        for j in (i + 1)..(components.len() - 1) {
-                            new_path = new_path.join(components[j].as_os_str());
+                        for c in components.iter().take(components.len() - 1).skip(i + 1) {
+                            new_path = new_path.join(c.as_os_str());
                         }
                         if let Some(result) = Self::find_in_dir(&new_path, name) {
                             return Some(result);
@@ -450,8 +450,7 @@ impl SourceMapper {
         ];
 
         for pattern in patterns {
-            if test_name.ends_with(pattern) {
-                let base = &test_name[..test_name.len() - pattern.len()];
+            if let Some(base) = test_name.strip_suffix(pattern) {
                 return Some(base.to_string());
             }
         }
@@ -490,10 +489,7 @@ impl SourceMapper {
 
     /// Check if a file is likely a test utility/helper (not a real test file)
     pub fn is_test_utility(path: &Path) -> bool {
-        let file_stem = path
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_stem = path.file_stem().and_then(|n| n.to_str()).unwrap_or("");
 
         // Common test utility file name patterns
         let utility_file_patterns = [
@@ -596,9 +592,7 @@ mod tests {
         assert!(SourceMapper::is_test_utility(Path::new(
             "tests/fixtures/user.ts"
         )));
-        assert!(SourceMapper::is_test_utility(Path::new(
-            "tests/setup.ts"
-        )));
+        assert!(SourceMapper::is_test_utility(Path::new("tests/setup.ts")));
         assert!(!SourceMapper::is_test_utility(Path::new(
             "src/auth.test.ts"
         )));

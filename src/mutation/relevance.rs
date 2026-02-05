@@ -51,13 +51,21 @@ pub struct SurvivedAtLine {
 fn suggestion_hint(description: &str) -> &'static str {
     if description.contains("return") {
         "Assert on the exact return value (e.g. expect(result).toEqual(...)) so null/undefined mutants are caught."
-    } else if description.contains(">=") || description.contains("<=") || description.contains("> to") || description.contains("< to") {
+    } else if description.contains(">=")
+        || description.contains("<=")
+        || description.contains("> to")
+        || description.contains("< to")
+    {
         "Add boundary tests (e.g. for x >= 18 test 17, 18, 19) so comparison mutants are caught."
     } else if description.contains("array") || description.contains("index") {
         "Assert on array length or element at index so array/index mutants are caught."
     } else if description.contains("string") || description.contains("empty") {
         "Assert on string content or length so empty-string mutants are caught."
-    } else if description.contains("++") || description.contains("--") || description.contains("+=") || description.contains("-=") {
+    } else if description.contains("++")
+        || description.contains("--")
+        || description.contains("+=")
+        || description.contains("-=")
+    {
         "Assert on the final value or side effect after the operation so increment/decrement mutants are caught."
     } else if description.contains("true") || description.contains("false") {
         "Assert on the exact boolean or outcome so true/false swap mutants are caught."
@@ -170,7 +178,14 @@ mod tests {
         let summary = relevance_summary(&result);
         assert_eq!(summary.kill_rate_percent, 33); // 1/3 killed
         assert_eq!(summary.lines_with_survived, 1); // only line 12
-        assert_eq!(summary.survived_by_line.get(&12).map(|v| v.len()).unwrap_or(0), 2);
+        assert_eq!(
+            summary
+                .survived_by_line
+                .get(&12)
+                .map(|v| v.len())
+                .unwrap_or(0),
+            2
+        );
         assert!(!summary.suggestions.is_empty());
     }
 }

@@ -3,8 +3,8 @@
 mod schema;
 
 pub use schema::{
-    Config, ConfigOverride, EffectiveConfig, FrameworkOverride, RuleSeverity,
-    SourceMappingConfig, SourceMappingMode,
+    Config, ConfigOverride, EffectiveConfig, FrameworkOverride, RuleSeverity, SourceMappingConfig,
+    SourceMappingMode,
 };
 
 use anyhow::{Context, Result};
@@ -39,10 +39,7 @@ pub fn load_config(work_dir: &Path, custom_path: Option<&Path>) -> Result<Config
 }
 
 /// Load a config file and resolve extends chain
-fn load_config_with_extends(
-    config_path: &Path,
-    visited: &mut HashSet<PathBuf>,
-) -> Result<Config> {
+fn load_config_with_extends(config_path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Config> {
     // Prevent circular extends
     let canonical = config_path
         .canonicalize()
@@ -117,7 +114,7 @@ fn find_node_modules_config(start_dir: &Path, package: &str) -> Option<PathBuf> 
     let mut dir = start_dir;
     loop {
         let node_modules = dir.join("node_modules").join(package);
-        
+
         // Try common config file locations in the package
         for filename in &[".rigorrc.json", "rigor.config.json", "index.json"] {
             let candidate = node_modules.join(filename);
@@ -154,8 +151,8 @@ fn find_config_in_parents(mut dir: &Path) -> Result<Option<PathBuf>> {
 pub fn build_ignore_set(patterns: &[String]) -> Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        let glob = Glob::new(pattern)
-            .with_context(|| format!("Invalid ignore pattern: {}", pattern))?;
+        let glob =
+            Glob::new(pattern).with_context(|| format!("Invalid ignore pattern: {}", pattern))?;
         builder.add(glob);
     }
     builder.build().map_err(|e| anyhow::anyhow!("{}", e))

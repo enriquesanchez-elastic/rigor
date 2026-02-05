@@ -71,8 +71,7 @@ impl AnalysisRule for BoundaryConditionsRule {
         let mut issues = Vec::new();
 
         // If we have source file, analyze boundary conditions
-        if let (Some(source_content), Some(source_tree)) =
-            (&self.source_content, &self.source_tree)
+        if let (Some(source_content), Some(source_tree)) = (&self.source_content, &self.source_tree)
         {
             let parser = SourceFileParser::new(source_content);
             let boundaries = parser.extract_boundary_conditions(source_tree);
@@ -235,8 +234,6 @@ mod tests {
             .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
 
-        assert!(issues
-            .iter()
-            .any(|i| i.message.contains("edge cases")));
+        assert!(issues.iter().any(|i| i.message.contains("edge cases")));
     }
 }

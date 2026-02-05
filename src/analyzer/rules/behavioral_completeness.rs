@@ -44,7 +44,11 @@ impl BehavioralCompletenessRule {
     }
 
     /// Find which return object keys are asserted: from test source (result.status) and from assertion.raw (e.g. .status, status:)
-    fn asserted_keys_in_tests(test_source: &str, tests: &[TestCase], fn_name: &str) -> HashSet<String> {
+    fn asserted_keys_in_tests(
+        test_source: &str,
+        tests: &[TestCase],
+        fn_name: &str,
+    ) -> HashSet<String> {
         let mut asserted = HashSet::new();
         let source_lower = test_source.to_lowercase();
         let fn_lower = fn_name.to_lowercase();
@@ -65,7 +69,8 @@ impl BehavioralCompletenessRule {
                             .find(|c: char| !c.is_alphanumeric() && c != '_')
                             .unwrap_or(rest.len());
                         let prop = rest[..end].to_string();
-                        if !prop.is_empty() && prop != "then" && prop != "catch" && prop.len() < 40 {
+                        if !prop.is_empty() && prop != "then" && prop != "catch" && prop.len() < 40
+                        {
                             asserted.insert(prop);
                         }
                         i += 1 + end;
@@ -77,7 +82,9 @@ impl BehavioralCompletenessRule {
         }
 
         // From source: result.property, response.property, etc.
-        let result_vars = ["result", "response", "res", "data", "output", "value", "ret"];
+        let result_vars = [
+            "result", "response", "res", "data", "output", "value", "ret",
+        ];
         for var in result_vars {
             let needle = format!("{}.", var);
             if !source_lower.contains(&needle) {
@@ -109,12 +116,18 @@ impl BehavioralCompletenessRule {
         let fn_lower = fn_name.to_lowercase();
         for test in tests {
             if test.name.to_lowercase().contains(&fn_lower)
-                || test.assertions.iter().any(|a| a.raw.to_lowercase().contains(&fn_lower))
+                || test
+                    .assertions
+                    .iter()
+                    .any(|a| a.raw.to_lowercase().contains(&fn_lower))
             {
                 return test.location.clone();
             }
         }
-        tests.first().map(|t| t.location.clone()).unwrap_or_else(|| Location::new(1, 1))
+        tests
+            .first()
+            .map(|t| t.location.clone())
+            .unwrap_or_else(|| Location::new(1, 1))
     }
 }
 
@@ -190,13 +203,13 @@ impl AnalysisRule for BehavioralCompletenessRule {
                         severity: Severity::Info,
                         message: format!(
                             "Function '{}' return object has {} properties; {} not asserted: {}",
-                            func.name, total, missing.len(), missing.join(", ")
+                            func.name,
+                            total,
+                            missing.len(),
+                            missing.join(", ")
                         ),
                         location,
-                        suggestion: Some(format!(
-                            "Consider verifying: {}",
-                            missing.join(", ")
-                        )),
+                        suggestion: Some(format!("Consider verifying: {}", missing.join(", "))),
                     });
                 }
             }

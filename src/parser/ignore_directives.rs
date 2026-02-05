@@ -58,7 +58,10 @@ impl IgnoreDirectives {
             // Single-line: ... rigor-ignore [rule-id] ... (anywhere in line)
             if line.contains("rigor-ignore") && !line.contains("rigor-ignore-next-line") {
                 if let Some(idx) = line.find("rigor-ignore") {
-                    let rest = line[idx..].strip_prefix("rigor-ignore").unwrap_or("").trim_start();
+                    let rest = line[idx..]
+                        .strip_prefix("rigor-ignore")
+                        .unwrap_or("")
+                        .trim_start();
                     let rest = rest.trim_end_matches('*').trim_end().trim_end_matches('/');
                     let rules = parse_rule_list(rest);
                     if rules.is_empty() {

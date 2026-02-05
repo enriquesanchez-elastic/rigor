@@ -32,7 +32,8 @@ pub fn run_mutations(
             continue;
         }
 
-        let (killed, stdout, stderr) = run_test_command(test_command, source_path.parent().unwrap_or(Path::new(".")));
+        let (killed, stdout, stderr) =
+            run_test_command(test_command, source_path.parent().unwrap_or(Path::new(".")));
 
         if fs::write(source_path, original_content).is_err() {
             // Best-effort restore; continue
@@ -57,10 +58,7 @@ fn run_test_command(cmd: &str, cwd: &Path) -> (bool, String, String) {
         (parts[0], parts[1..].to_vec())
     };
 
-    let output = Command::new(binary)
-        .args(args)
-        .current_dir(cwd)
-        .output();
+    let output = Command::new(binary).args(args).current_dir(cwd).output();
 
     match output {
         Ok(o) => {

@@ -38,7 +38,8 @@ impl AnalysisRule for AsyncPatternsRule {
             // expect(...).resolves or expect(...).rejects without await expect
             let has_resolves = trimmed.contains(".resolves.");
             let has_rejects = trimmed.contains(".rejects.");
-            let has_await_expect = trimmed.contains("await expect(") || trimmed.contains("await expect (");
+            let has_await_expect =
+                trimmed.contains("await expect(") || trimmed.contains("await expect (");
 
             if (has_resolves || has_rejects) && !has_await_expect {
                 let col = line.find("expect(").unwrap_or(0) + 1;
@@ -67,10 +68,7 @@ impl AnalysisRule for AsyncPatternsRule {
             // Skip this check for now or do a simple scan: in the lines between test.location.line and test.location.end_line,
             // check for "await ". If async test and no await in that range, warn.
             let start = test.location.line.saturating_sub(1);
-            let end_line = test
-                .location
-                .end_line
-                .unwrap_or(test.location.line + 49);
+            let end_line = test.location.end_line.unwrap_or(test.location.line + 49);
             let line_count = end_line.saturating_sub(test.location.line) + 1;
             let test_lines: Vec<&str> = source.lines().skip(start).take(line_count).collect();
             let has_await = test_lines.iter().any(|l| {
@@ -92,7 +90,8 @@ impl AnalysisRule for AsyncPatternsRule {
                         ),
                         location: test.location.clone(),
                         suggestion: Some(
-                            "Ensure async operations are awaited to avoid race conditions".to_string(),
+                            "Ensure async operations are awaited to avoid race conditions"
+                                .to_string(),
                         ),
                     });
                 }

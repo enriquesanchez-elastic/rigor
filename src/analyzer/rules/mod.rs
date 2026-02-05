@@ -1,7 +1,8 @@
 //! Analysis rules for test quality
 
-pub mod assertion_quality;
 pub mod assertion_intent;
+pub mod assertion_quality;
+pub mod async_patterns;
 pub mod behavioral_completeness;
 pub mod boundary_conditions;
 pub mod boundary_specificity;
@@ -10,7 +11,6 @@ pub mod debug_code;
 pub mod error_coverage;
 pub mod flaky_patterns;
 pub mod input_variety;
-pub mod async_patterns;
 pub mod mock_abuse;
 pub mod mutation_resistant;
 pub mod naming_quality;
@@ -21,12 +21,12 @@ pub mod state_verification;
 pub mod test_isolation;
 pub mod trivial_assertion;
 
-pub use assertion_quality::AssertionQualityRule;
 pub use assertion_intent::AssertionIntentRule;
-pub use behavioral_completeness::BehavioralCompletenessRule;
-pub use boundary_specificity::BoundarySpecificityRule;
+pub use assertion_quality::AssertionQualityRule;
 pub use async_patterns::AsyncPatternsRule;
+pub use behavioral_completeness::BehavioralCompletenessRule;
 pub use boundary_conditions::BoundaryConditionsRule;
+pub use boundary_specificity::BoundarySpecificityRule;
 pub use coupling::CouplingAnalysisRule;
 pub use debug_code::DebugCodeRule;
 pub use error_coverage::ErrorCoverageRule;

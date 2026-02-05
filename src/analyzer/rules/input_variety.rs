@@ -151,10 +151,11 @@ impl InputVarietyRule {
 
         diversity.unique_string_count = unique_strings.len();
         diversity.unique_number_count = unique_numbers.len();
-        
+
         // Collect actual values for better suggestions
         diversity.collected_numbers = unique_numbers.iter().map(|s| s.to_string()).collect();
-        diversity.collected_strings = unique_strings.iter()
+        diversity.collected_strings = unique_strings
+            .iter()
             .take(5) // Limit to avoid huge lists
             .map(|s| s.to_string())
             .collect();
@@ -209,13 +210,15 @@ impl ValueDiversity {
     /// Suggest missing edge cases based on collected values
     fn suggest_missing_edge_cases(&self) -> String {
         let mut suggestions = Vec::new();
-        
+
         if self.has_numbers {
-            let nums_preview: Vec<&str> = self.collected_numbers.iter()
+            let nums_preview: Vec<&str> = self
+                .collected_numbers
+                .iter()
                 .take(5)
                 .map(|s| s.as_str())
                 .collect();
-            
+
             let mut missing = Vec::new();
             if !self.has_zero {
                 missing.push("0");
@@ -223,38 +226,49 @@ impl ValueDiversity {
             if !self.has_negative {
                 missing.push("-1");
             }
-            
+
             if !missing.is_empty() {
                 let collected = if nums_preview.is_empty() {
                     String::new()
                 } else {
                     format!("Uses: [{}]. ", nums_preview.join(", "))
                 };
-                suggestions.push(format!("{}Consider adding: {}", collected, missing.join(", ")));
+                suggestions.push(format!(
+                    "{}Consider adding: {}",
+                    collected,
+                    missing.join(", ")
+                ));
             }
         }
-        
+
         if self.has_strings && !self.has_empty_string {
-            let strs_preview: Vec<&str> = self.collected_strings.iter()
+            let strs_preview: Vec<&str> = self
+                .collected_strings
+                .iter()
                 .take(3)
                 .map(|s| s.as_str())
                 .collect();
-            
+
             if !strs_preview.is_empty() {
-                suggestions.push(format!("Uses strings like: [{}]. Consider adding: ''", strs_preview.join(", ")));
+                suggestions.push(format!(
+                    "Uses strings like: [{}]. Consider adding: ''",
+                    strs_preview.join(", ")
+                ));
             } else {
                 suggestions.push("Consider adding empty string ''".to_string());
             }
         }
-        
+
         suggestions.join("; ")
     }
-    
+
     /// Format the collected values for display
     fn format_collected_values(&self, kind: &str) -> String {
         match kind {
             "number" => {
-                let nums: Vec<&str> = self.collected_numbers.iter()
+                let nums: Vec<&str> = self
+                    .collected_numbers
+                    .iter()
                     .take(5)
                     .map(|s| s.as_str())
                     .collect();
@@ -267,7 +281,9 @@ impl ValueDiversity {
                 }
             }
             "string" => {
-                let strs: Vec<&str> = self.collected_strings.iter()
+                let strs: Vec<&str> = self
+                    .collected_strings
+                    .iter()
                     .take(3)
                     .map(|s| s.as_str())
                     .collect();
@@ -279,7 +295,7 @@ impl ValueDiversity {
                     format!(" (uses: [{}])", strs.join(", "))
                 }
             }
-            _ => String::new()
+            _ => String::new(),
         }
     }
 }
@@ -307,7 +323,10 @@ impl AnalysisRule for InputVarietyRule {
                 severity: Severity::Info,
                 message: format!("Tests use numbers but don't test with 0{}", values_info),
                 location: Location::new(1, 1),
-                suggestion: Some(format!("Add test cases with value 0. {}", diversity.suggest_missing_edge_cases())),
+                suggestion: Some(format!(
+                    "Add test cases with value 0. {}",
+                    diversity.suggest_missing_edge_cases()
+                )),
             });
         }
 
@@ -316,7 +335,10 @@ impl AnalysisRule for InputVarietyRule {
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Info,
-                message: format!("Tests use numbers but don't test negative values{}", values_info),
+                message: format!(
+                    "Tests use numbers but don't test negative values{}",
+                    values_info
+                ),
                 location: Location::new(1, 1),
                 suggestion: Some("Add test cases with negative numbers like -1".to_string()),
             });
@@ -328,7 +350,10 @@ impl AnalysisRule for InputVarietyRule {
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Info,
-                message: format!("Tests use strings but don't test empty strings{}", values_info),
+                message: format!(
+                    "Tests use strings but don't test empty strings{}",
+                    values_info
+                ),
                 location: Location::new(1, 1),
                 suggestion: Some("Add test cases with empty string ''".to_string()),
             });
@@ -347,7 +372,9 @@ impl AnalysisRule for InputVarietyRule {
         // Check for hardcoded values that look like real data
         for value in &values {
             if value.kind == ValueKind::String {
-                let trimmed = value.raw.trim_matches(|c| c == '"' || c == '\'' || c == '`');
+                let trimmed = value
+                    .raw
+                    .trim_matches(|c| c == '"' || c == '\'' || c == '`');
                 // Check for patterns that look like real emails, names, etc.
                 if trimmed.contains('@') && trimmed.contains('.') && trimmed.len() > 10 {
                     issues.push(Issue {
@@ -373,7 +400,9 @@ impl AnalysisRule for InputVarietyRule {
 
         // Check if tests only use a very limited set of values
         if diversity.unique_number_count == 1 && tests.len() > 3 {
-            let value = diversity.collected_numbers.first()
+            let value = diversity
+                .collected_numbers
+                .first()
                 .map(|s| s.as_str())
                 .unwrap_or("?");
             let mut missing = Vec::new();
@@ -384,18 +413,23 @@ impl AnalysisRule for InputVarietyRule {
                 missing.push("-1");
             }
             missing.push("larger values");
-            
+
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Warning,
                 message: format!("All tests use the same numeric value: {}", value),
                 location: Location::new(1, 1),
-                suggestion: Some(format!("Vary test input values. Consider adding: {}", missing.join(", "))),
+                suggestion: Some(format!(
+                    "Vary test input values. Consider adding: {}",
+                    missing.join(", ")
+                )),
             });
         }
 
         if diversity.unique_string_count == 1 && diversity.has_strings && tests.len() > 3 {
-            let value = diversity.collected_strings.first()
+            let value = diversity
+                .collected_strings
+                .first()
                 .map(|s| {
                     if s.len() > 20 {
                         format!("{}...", &s[..17])
@@ -404,7 +438,7 @@ impl AnalysisRule for InputVarietyRule {
                     }
                 })
                 .unwrap_or_else(|| "?".to_string());
-            
+
             issues.push(Issue {
                 rule: Rule::LimitedInputVariety,
                 severity: Severity::Warning,

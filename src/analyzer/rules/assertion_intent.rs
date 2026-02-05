@@ -67,7 +67,9 @@ impl AssertionIntentRule {
     /// Assertions actually verify a throw/reject.
     fn has_throw_assertion(assertions: &[crate::Assertion]) -> bool {
         assertions.iter().any(|a| {
-            matches!(a.kind, AssertionKind::ToThrow) || a.raw.contains("rejects") || a.raw.contains("toThrow")
+            matches!(a.kind, AssertionKind::ToThrow)
+                || a.raw.contains("rejects")
+                || a.raw.contains("toThrow")
         })
     }
 
@@ -120,7 +122,8 @@ impl AssertionIntentRule {
                     | AssertionKind::ToHaveLength
                     | AssertionKind::ToBeGreaterThan
                     | AssertionKind::ToBeLessThan
-            ) || (a.quality == crate::AssertionQuality::Strong && !a.raw.to_lowercase().contains("tobedefined"))
+            ) || (a.quality == crate::AssertionQuality::Strong
+                && !a.raw.to_lowercase().contains("tobedefined"))
         })
     }
 }
@@ -195,8 +198,13 @@ impl AnalysisRule for AssertionIntentRule {
             }
 
             // Name suggests a specific return value but only weak assertions (e.g. toBeDefined)
-            if Self::name_implies_return_value(name) && !Self::has_specific_value_assertion(&test.assertions) {
-                let all_weak = test.assertions.iter().all(|a| a.quality == crate::AssertionQuality::Weak);
+            if Self::name_implies_return_value(name)
+                && !Self::has_specific_value_assertion(&test.assertions)
+            {
+                let all_weak = test
+                    .assertions
+                    .iter()
+                    .all(|a| a.quality == crate::AssertionQuality::Weak);
                 if all_weak {
                     issues.push(Issue {
                         rule: Rule::AssertionIntentMismatch,
@@ -260,23 +268,38 @@ mod tests {
     fn flags_throws_name_without_to_throw() {
         let tests = vec![test_case(
             "throws when input is invalid",
-            vec![assertion(AssertionKind::ToBeDefined, "expect(result).toBeDefined()")],
+            vec![assertion(
+                AssertionKind::ToBeDefined,
+                "expect(result).toBeDefined()",
+            )],
         )];
         let rule = AssertionIntentRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(!issues.is_empty());
-        assert!(issues.iter().any(|i| i.rule == Rule::AssertionIntentMismatch && i.message.contains("error is thrown")));
+        assert!(issues
+            .iter()
+            .any(|i| i.rule == Rule::AssertionIntentMismatch
+                && i.message.contains("error is thrown")));
     }
 
     #[test]
     fn no_issue_when_throws_and_has_to_throw() {
         let tests = vec![test_case(
             "throws when input is invalid",
-            vec![assertion(AssertionKind::ToThrow, "expect(() => fn()).toThrow()")],
+            vec![assertion(
+                AssertionKind::ToThrow,
+                "expect(() => fn()).toThrow()",
+            )],
         )];
         let rule = AssertionIntentRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty() || !issues.iter().any(|i| i.message.contains("error is thrown")));
     }
@@ -285,11 +308,19 @@ mod tests {
     fn flags_status_name_without_status_assertion() {
         let tests = vec![test_case(
             "returns 404 when not found",
-            vec![assertion(AssertionKind::ToBeDefined, "expect(res).toBeDefined()")],
+            vec![assertion(
+                AssertionKind::ToBeDefined,
+                "expect(res).toBeDefined()",
+            )],
         )];
         let rule = AssertionIntentRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
-        assert!(issues.iter().any(|i| i.rule == Rule::AssertionIntentMismatch));
+        assert!(issues
+            .iter()
+            .any(|i| i.rule == Rule::AssertionIntentMismatch));
     }
 }

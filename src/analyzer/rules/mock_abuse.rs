@@ -8,8 +8,17 @@ const MOCK_COUNT_WARNING_THRESHOLD: usize = 5;
 
 /// Standard library / built-in modules that are suspicious to mock
 const STD_MOCKS: &[&str] = &[
-    "Array", "Object", "Promise", "Map", "Set", "Date", "Math",
-    "fetch", "globalThis", "process", "require",
+    "Array",
+    "Object",
+    "Promise",
+    "Map",
+    "Set",
+    "Date",
+    "Math",
+    "fetch",
+    "globalThis",
+    "process",
+    "require",
 ];
 
 /// Rule for detecting mock abuse
@@ -51,7 +60,11 @@ impl MockAbuseRule {
 
     /// Check if any mocked module looks like the module under test (e.g. same file name)
     #[allow(dead_code)]
-    fn mocks_module_under_test(_source: &str, mocked: &[(usize, String)], test_file_path: Option<&str>) -> Option<(usize, String)> {
+    fn mocks_module_under_test(
+        _source: &str,
+        mocked: &[(usize, String)],
+        test_file_path: Option<&str>,
+    ) -> Option<(usize, String)> {
         let under_test = test_file_path.and_then(|p| {
             let stem = std::path::Path::new(p).file_stem()?;
             let stem = stem.to_str()?;

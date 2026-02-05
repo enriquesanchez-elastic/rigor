@@ -162,7 +162,10 @@ mod tests {
             vec![assertion(AssertionKind::ToBe, "expect(1).toBe(1)")],
         )];
         let rule = TrivialAssertionRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::TrivialAssertion));
@@ -175,7 +178,10 @@ mod tests {
             vec![assertion(AssertionKind::ToBe, "expect(true).toBe(true)")],
         )];
         let rule = TrivialAssertionRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(!issues.is_empty());
     }
@@ -187,7 +193,10 @@ mod tests {
             vec![assertion(AssertionKind::ToBe, "expect(myFunc()).toBe(42)")],
         )];
         let rule = TrivialAssertionRule::new();
-        let tree = crate::parser::TypeScriptParser::new().unwrap().parse("x").unwrap();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty());
     }

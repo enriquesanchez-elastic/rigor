@@ -6,4 +6,4 @@ pub mod claude;
 
 pub use ai::AiSuggestionGenerator;
 pub use applier::{extract_code_block, offer_apply};
-pub use claude::{ClaudeClient, ClaudeError, ClaudeResponse, is_ai_available};
+pub use claude::{is_ai_available, ClaudeClient, ClaudeError, ClaudeResponse};

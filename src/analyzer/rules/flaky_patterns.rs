@@ -64,8 +64,9 @@ impl AnalysisRule for FlakyPatternsRule {
                 issues.push(Issue {
                     rule: Rule::FlakyPattern,
                     severity: Severity::Warning,
-                    message: "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it"
-                        .to_string(),
+                    message:
+                        "Date.now() is non-deterministic - use jest.useFakeTimers() or mock it"
+                            .to_string(),
                     location: Location::new(line_no, col),
                     suggestion: Some(
                         "Use jest.useFakeTimers() and jest.setSystemTime() for deterministic dates"
@@ -75,7 +76,8 @@ impl AnalysisRule for FlakyPatternsRule {
             }
 
             // new Date() without freeze
-            if (trimmed.contains("new Date()") || trimmed.contains("new Date (")) && !has_fake_timers
+            if (trimmed.contains("new Date()") || trimmed.contains("new Date ("))
+                && !has_fake_timers
             {
                 let col = line.find("new Date").unwrap_or(0) + 1;
                 issues.push(Issue {
@@ -98,7 +100,8 @@ impl AnalysisRule for FlakyPatternsRule {
                         .to_string(),
                     location: Location::new(line_no, col),
                     suggestion: Some(
-                        "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar".to_string(),
+                        "Use jest.spyOn(Math, 'random').mockReturnValue(0.5) or similar"
+                            .to_string(),
                     ),
                 });
             }
@@ -111,10 +114,10 @@ impl AnalysisRule for FlakyPatternsRule {
                 let has_literal_delay = trimmed.matches(char::is_numeric).count() >= 1;
                 if has_literal_delay {
                     let col = line
-                    .find("setTimeout")
-                    .or_else(|| line.find("setInterval"))
-                    .unwrap_or(0)
-                    + 1;
+                        .find("setTimeout")
+                        .or_else(|| line.find("setInterval"))
+                        .unwrap_or(0)
+                        + 1;
                     issues.push(Issue {
                         rule: Rule::FlakyPattern,
                         severity: Severity::Warning,
@@ -129,19 +132,28 @@ impl AnalysisRule for FlakyPatternsRule {
             }
 
             // fetch() or axios without mock (in unit test context - simple heuristic)
-            if (trimmed.contains("fetch(") || trimmed.contains("axios.") || trimmed.contains("axios("))
+            if (trimmed.contains("fetch(")
+                || trimmed.contains("axios.")
+                || trimmed.contains("axios("))
                 && !trimmed.contains("mock")
                 && !has_fetch_mock
             {
                 // Avoid double-reporting per line
-                if !issues.iter().any(|i| i.location.line == line_no && i.rule == Rule::FlakyPattern)
+                if !issues
+                    .iter()
+                    .any(|i| i.location.line == line_no && i.rule == Rule::FlakyPattern)
                 {
-                    let col = line.find("fetch(").or_else(|| line.find("axios")).unwrap_or(0) + 1;
+                    let col = line
+                        .find("fetch(")
+                        .or_else(|| line.find("axios"))
+                        .unwrap_or(0)
+                        + 1;
                     issues.push(Issue {
                         rule: Rule::FlakyPattern,
                         severity: Severity::Warning,
-                        message: "Network call (fetch/axios) without mock - test may be flaky or slow"
-                            .to_string(),
+                        message:
+                            "Network call (fetch/axios) without mock - test may be flaky or slow"
+                                .to_string(),
                         location: Location::new(line_no, col),
                         suggestion: Some(
                             "Mock fetch/axios with jest.mock() or MSW for unit tests".to_string(),

@@ -3,13 +3,15 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use rigor::analyzer::AnalysisEngine;
 use rigor::cache::AnalysisCache;
 use rigor::config::{build_ignore_set, is_ignored, load_config, CONFIG_FILENAME};
-use rigor::analyzer::AnalysisEngine;
+use rigor::history::{
+    append_run, find_project_root, format_delta, load_history, previous_score, save_history,
+};
 use rigor::mutation::{self, report_mutation_result};
 use rigor::reporter::{ConsoleReporter, JsonReporter, SarifReporter};
 use rigor::suggestions::{extract_code_block, offer_apply, AiSuggestionGenerator};
-use rigor::history::{append_run, find_project_root, format_delta, load_history, previous_score, save_history};
 use rigor::watcher::TestWatcher;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -99,7 +101,7 @@ struct Args {
     /// Number of parallel threads (default: number of CPU cores)
     #[arg(long, value_name = "N")]
     jobs: Option<usize>,
-    
+
     /// Path to coverage JSON file (Istanbul/c8/nyc format)
     #[arg(long, value_name = "PATH")]
     coverage: Option<PathBuf>,
@@ -146,13 +148,20 @@ fn run() -> Result<ExitCode> {
                     .map_err(|e| anyhow::anyhow!("{}", e))
                     .and(Ok(ExitCode::SUCCESS));
             }
-            Commands::Init { threshold, framework, dir } => {
+            Commands::Init {
+                threshold,
+                framework,
+                dir,
+            } => {
                 return run_init(threshold, framework, dir.as_deref());
             }
         }
     }
 
-    let path = args.path.clone().expect("path required when not using subcommand");
+    let path = args
+        .path
+        .clone()
+        .expect("path required when not using subcommand");
 
     if args.watch {
         return run_watch(&args, &path);
@@ -268,7 +277,7 @@ fn run() -> Result<ExitCode> {
 
     // Calculate aggregate stats
     let stats = AnalysisEngine::aggregate_stats(&results);
-    
+
     // Load coverage data if provided (available for future enhancements)
     let _coverage_report = if let Some(ref coverage_path) = args.coverage {
         match rigor::coverage::load_coverage(coverage_path) {
@@ -355,16 +364,20 @@ fn run() -> Result<ExitCode> {
             _ => 10,
         };
         let test_cmd = std::env::var("RIGOR_TEST_CMD").unwrap_or_else(|_| "npm test".to_string());
-        
+
         // Collect all source files from analysis results
         let source_paths: Vec<PathBuf> = results
             .iter()
             .filter_map(|r| r.source_file.clone())
             .filter(|p| p.exists())
             .collect();
-        
+
         if source_paths.is_empty() {
-            if !args.quiet && results.iter().any(|r| !is_likely_e2e_test(r.file_path.as_path())) {
+            if !args.quiet
+                && results
+                    .iter()
+                    .any(|r| !is_likely_e2e_test(r.file_path.as_path()))
+            {
                 eprintln!(
                     "{}: --mutate requires source files (test files must map to .ts sources, e.g. foo.test.ts → foo.ts). Cypress/e2e tests often have no single source.",
                     "Warning".yellow()
@@ -389,14 +402,11 @@ fn run() -> Result<ExitCode> {
                     source_paths.len()
                 );
             }
-            
+
             let use_parallel = args.parallel || source_paths.len() > 3;
-            if let Ok(batch_result) = mutation::run_batch_mutation_test(
-                &source_paths,
-                &test_cmd,
-                count,
-                use_parallel,
-            ) {
+            if let Ok(batch_result) =
+                mutation::run_batch_mutation_test(&source_paths, &test_cmd, count, use_parallel)
+            {
                 mutation::report_batch_mutation_result(&batch_result);
             }
         }
@@ -441,15 +451,13 @@ fn run() -> Result<ExitCode> {
                 } else {
                     // Try Claude API if available
                     let claude_result = try_claude_api(result, &prompt, args.quiet);
-                    
+
                     if let Some(suggested) = claude_result {
-                        let current = std::fs::read_to_string(&result.file_path).unwrap_or_default();
+                        let current =
+                            std::fs::read_to_string(&result.file_path).unwrap_or_default();
                         let _ = offer_apply(&result.file_path, &current, &suggested);
                     } else if !args.quiet {
-                        eprintln!(
-                            "\n{}: To auto-apply fixes, either:",
-                            "Info".blue()
-                        );
+                        eprintln!("\n{}: To auto-apply fixes, either:", "Info".blue());
                         eprintln!("  1. Set ANTHROPIC_API_KEY for built-in Claude integration");
                         eprintln!("  2. Set RIGOR_APPLY_CMD to a custom command");
                         eprintln!("\nShowing prompt instead:\n");
@@ -460,8 +468,9 @@ fn run() -> Result<ExitCode> {
                     }
                 }
             } else if let Some(output_path) = args.fix_output {
-                std::fs::write(&output_path, &prompt)
-                    .with_context(|| format!("Failed to write prompt to {}", output_path.display()))?;
+                std::fs::write(&output_path, &prompt).with_context(|| {
+                    format!("Failed to write prompt to {}", output_path.display())
+                })?;
                 if !args.quiet {
                     eprintln!(
                         "{}: AI prompt written to {}",
@@ -563,16 +572,14 @@ fn run_init(
   ]
 }}
 "#,
-        threshold_value,
-        framework_value
+        threshold_value, framework_value
     );
     // Note: Users can also add these options to the config:
     // - "testRoot": "tests" - directory to search for tests recursively
     // - "testPatterns": [".test.ts", ".spec.ts"] - custom test file patterns
 
-    std::fs::write(&config_path, json).with_context(|| {
-        format!("Failed to write config to {}", config_path.display())
-    })?;
+    std::fs::write(&config_path, json)
+        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
     println!(
         "{}: Created {} with threshold={}, framework={}",
@@ -584,11 +591,11 @@ fn run_init(
     Ok(ExitCode::SUCCESS)
 }
 
-fn run_watch(args: &Args, path: &PathBuf) -> Result<ExitCode> {
+fn run_watch(args: &Args, path: &Path) -> Result<ExitCode> {
     let work_dir = if path.is_file() {
         path.parent().unwrap_or(Path::new("."))
     } else {
-        path.as_path()
+        path
     };
 
     let config = load_config(work_dir, args.config.as_deref())?
@@ -606,7 +613,10 @@ fn run_watch(args: &Args, path: &PathBuf) -> Result<ExitCode> {
     };
 
     let watcher = TestWatcher::watch(path).context("Failed to create file watcher")?;
-    eprintln!("{}: Watching for changes... (Ctrl+C to stop)", "Info".blue());
+    eprintln!(
+        "{}: Watching for changes... (Ctrl+C to stop)",
+        "Info".blue()
+    );
 
     loop {
         let paths = watcher.next_changes();
@@ -651,7 +661,10 @@ fn collect_staged_test_files(
         .output()
         .context("Failed to run git diff (is this a git repo?)")?;
     if !output.status.success() {
-        anyhow::bail!("git diff --cached failed: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "git diff --cached failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     let names = String::from_utf8_lossy(&output.stdout);
     let mut files = Vec::new();
@@ -730,10 +743,7 @@ fn is_test_file(path: &std::path::Path, test_patterns: &[&str]) -> bool {
     };
 
     // Skip node_modules
-    if path
-        .components()
-        .any(|c| c.as_os_str() == "node_modules")
-    {
+    if path.components().any(|c| c.as_os_str() == "node_modules") {
         return false;
     }
 
@@ -743,7 +753,7 @@ fn is_test_file(path: &std::path::Path, test_patterns: &[&str]) -> bool {
 
 /// Try to use Claude API for generating improved tests
 fn try_claude_api(result: &rigor::AnalysisResult, _prompt: &str, quiet: bool) -> Option<String> {
-    use rigor::suggestions::{ClaudeClient, is_ai_available};
+    use rigor::suggestions::{is_ai_available, ClaudeClient};
 
     if !is_ai_available() {
         if !quiet {
@@ -765,24 +775,22 @@ fn try_claude_api(result: &rigor::AnalysisResult, _prompt: &str, quiet: bool) ->
     }
 
     match ClaudeClient::from_env() {
-        Ok(client) => {
-            match client.improve_tests(result) {
-                Ok(response) => {
-                    if !quiet {
-                        if let Some(tokens) = response.tokens_used {
-                            eprintln!("{}: Generated {} tokens", "AI".cyan().bold(), tokens);
-                        }
+        Ok(client) => match client.improve_tests(result) {
+            Ok(response) => {
+                if !quiet {
+                    if let Some(tokens) = response.tokens_used {
+                        eprintln!("{}: Generated {} tokens", "AI".cyan().bold(), tokens);
                     }
-                    Some(response.improved_code)
                 }
-                Err(e) => {
-                    if !quiet {
-                        eprintln!("{}: {}", "AI Error".red(), e);
-                    }
-                    None
-                }
+                Some(response.improved_code)
             }
-        }
+            Err(e) => {
+                if !quiet {
+                    eprintln!("{}: {}", "AI Error".red(), e);
+                }
+                None
+            }
+        },
         Err(e) => {
             if !quiet {
                 eprintln!("{}: {}", "AI Error".red(), e);
@@ -803,7 +811,7 @@ fn collect_changed_test_files(
         .current_dir(work_dir)
         .output()
         .context("Failed to run git diff (is this a git repo?)")?;
-    
+
     // Also get untracked files
     let untracked = std::process::Command::new("git")
         .args(["ls-files", "--others", "--exclude-standard"])
@@ -856,7 +864,7 @@ fn analyze_files_sequential_cached(
     for file in files {
         // Try to read file content for caching
         let test_content = std::fs::read_to_string(file).ok();
-        
+
         // Check cache first
         if let Some(ref content) = test_content {
             if let Some(cached) = cache.get(file, content, None) {
@@ -912,25 +920,22 @@ fn analyze_files_parallel(
     use std::sync::atomic::{AtomicBool, Ordering};
 
     let had_errors = AtomicBool::new(false);
-    let quiet = quiet;
 
     let results: Vec<_> = files
         .par_iter()
-        .filter_map(|file| {
-            match engine.analyze(file, Some(config)) {
-                Ok(result) => Some(result),
-                Err(e) => {
-                    had_errors.store(true, Ordering::Relaxed);
-                    if !quiet {
-                        eprintln!(
-                            "{}: Failed to analyze {}: {}",
-                            "Error".red(),
-                            file.display(),
-                            e
-                        );
-                    }
-                    None
+        .filter_map(|file| match engine.analyze(file, Some(config)) {
+            Ok(result) => Some(result),
+            Err(e) => {
+                had_errors.store(true, Ordering::Relaxed);
+                if !quiet {
+                    eprintln!(
+                        "{}: Failed to analyze {}: {}",
+                        "Error".red(),
+                        file.display(),
+                        e
+                    );
                 }
+                None
             }
         })
         .collect();
@@ -1011,17 +1016,38 @@ mod tests {
             ".spec.js",
             ".spec.jsx",
         ];
-        assert!(is_test_file(std::path::Path::new("foo.test.ts"), &default_patterns));
-        assert!(is_test_file(std::path::Path::new("bar.spec.tsx"), &default_patterns));
-        assert!(!is_test_file(std::path::Path::new("util.ts"), &default_patterns));
-        assert!(!is_test_file(std::path::Path::new("node_modules/foo.test.ts"), &default_patterns));
+        assert!(is_test_file(
+            std::path::Path::new("foo.test.ts"),
+            &default_patterns
+        ));
+        assert!(is_test_file(
+            std::path::Path::new("bar.spec.tsx"),
+            &default_patterns
+        ));
+        assert!(!is_test_file(
+            std::path::Path::new("util.ts"),
+            &default_patterns
+        ));
+        assert!(!is_test_file(
+            std::path::Path::new("node_modules/foo.test.ts"),
+            &default_patterns
+        ));
     }
 
     #[test]
     fn test_is_test_file_custom_patterns() {
         let custom_patterns = [".integration.ts", "_test.ts"];
-        assert!(is_test_file(std::path::Path::new("auth.integration.ts"), &custom_patterns));
-        assert!(is_test_file(std::path::Path::new("user_test.ts"), &custom_patterns));
-        assert!(!is_test_file(std::path::Path::new("foo.test.ts"), &custom_patterns));
+        assert!(is_test_file(
+            std::path::Path::new("auth.integration.ts"),
+            &custom_patterns
+        ));
+        assert!(is_test_file(
+            std::path::Path::new("user_test.ts"),
+            &custom_patterns
+        ));
+        assert!(!is_test_file(
+            std::path::Path::new("foo.test.ts"),
+            &custom_patterns
+        ));
     }
 }

@@ -21,32 +21,32 @@ impl CouplingAnalysisRule {
             source_exports: Vec::new(),
         }
     }
-    
+
     /// Set source exports to check against
     pub fn with_source_exports(mut self, exports: Vec<String>) -> Self {
         self.source_exports = exports;
         self
     }
-    
+
     /// Extract imports from test file
     fn extract_test_imports(source: &str, tree: &Tree) -> Vec<ImportInfo> {
         let mut imports = Vec::new();
         Self::visit_for_imports(tree.root_node(), source, &mut imports);
         imports
     }
-    
+
     fn visit_for_imports(node: Node, source: &str, imports: &mut Vec<ImportInfo>) {
         if node.kind() == "import_statement" {
             if let Some(import_info) = Self::parse_import(node, source) {
                 imports.push(import_info);
             }
         }
-        
+
         for child in node.named_children(&mut node.walk()) {
             Self::visit_for_imports(child, source, imports);
         }
     }
-    
+
     fn parse_import(node: Node, source: &str) -> Option<ImportInfo> {
         let mut imported_names = Vec::new();
         let mut source_path = String::new();
@@ -54,7 +54,7 @@ impl CouplingAnalysisRule {
             node.start_position().row + 1,
             node.start_position().column + 1,
         );
-        
+
         for child in node.named_children(&mut node.walk()) {
             match child.kind() {
                 "import_clause" => {
@@ -69,18 +69,18 @@ impl CouplingAnalysisRule {
                 _ => {}
             }
         }
-        
+
         if imported_names.is_empty() && source_path.is_empty() {
             return None;
         }
-        
+
         Some(ImportInfo {
             names: imported_names,
             source: source_path,
             location,
         })
     }
-    
+
     fn collect_import_names(node: Node, source: &str, names: &mut Vec<String>) {
         match node.kind() {
             "identifier" => {
@@ -110,18 +110,18 @@ impl CouplingAnalysisRule {
             }
         }
     }
-    
+
     /// Find which imported names are actually used in the test file
     fn find_used_imports(source: &str, imports: &[ImportInfo]) -> HashSet<String> {
         let source_lower = source.to_lowercase();
         let mut used = HashSet::new();
-        
+
         for import in imports {
             for name in &import.names {
                 // Simple heuristic: if the name appears elsewhere in the file, it's used
                 // This is imperfect but catches most cases
                 let name_lower = name.to_lowercase();
-                
+
                 // Count occurrences - if more than in import statement, it's used
                 let count = source_lower.matches(&name_lower).count();
                 if count > 1 {
@@ -129,7 +129,7 @@ impl CouplingAnalysisRule {
                 }
             }
         }
-        
+
         used
     }
 }
@@ -162,10 +162,10 @@ impl AnalysisRule for CouplingAnalysisRule {
         // Check for untested exports
         if !self.source_exports.is_empty() {
             let source_lower = source.to_lowercase();
-            
+
             for export_name in &self.source_exports {
                 let name_lower = export_name.to_lowercase();
-                
+
                 // Check if export is referenced in test file
                 if !source_lower.contains(&name_lower) {
                     issues.push(Issue {
@@ -176,19 +176,16 @@ impl AnalysisRule for CouplingAnalysisRule {
                             export_name
                         ),
                         location: Location::new(1, 1),
-                        suggestion: Some(format!(
-                            "Consider adding tests for '{}'",
-                            export_name
-                        )),
+                        suggestion: Some(format!("Consider adding tests for '{}'", export_name)),
                     });
                 }
             }
         }
-        
+
         // Check for dead imports (imports not used in tests)
         let imports = Self::extract_test_imports(source, tree);
         let used_imports = Self::find_used_imports(source, &imports);
-        
+
         for import in &imports {
             // Skip imports from testing libraries
             if import.source.contains("@testing-library")
@@ -198,7 +195,7 @@ impl AnalysisRule for CouplingAnalysisRule {
             {
                 continue;
             }
-            
+
             for name in &import.names {
                 if !used_imports.contains(name) {
                     issues.push(Issue {
@@ -252,14 +249,21 @@ mod tests {
         let tree = parser.parse(source).unwrap();
         let imports = CouplingAnalysisRule::extract_test_imports(source, &tree);
 
-        assert!(imports.len() >= 2, "Expected at least 2 imports, got {}", imports.len());
-        
+        assert!(
+            imports.len() >= 2,
+            "Expected at least 2 imports, got {}",
+            imports.len()
+        );
+
         // Check that we found the math import
         let math_import = imports.iter().find(|i| i.source.contains("math"));
         assert!(math_import.is_some(), "Should find math import");
-        
+
         if let Some(mi) = math_import {
-            assert!(mi.names.contains(&"add".to_string()), "Should have 'add' in imports");
+            assert!(
+                mi.names.contains(&"add".to_string()),
+                "Should have 'add' in imports"
+            );
         }
     }
 
@@ -282,7 +286,13 @@ mod tests {
 
         assert!(used.contains("add"), "'add' should be detected as used");
         // subtract and multiply are only in import, so only 1 occurrence
-        assert!(!used.contains("subtract"), "'subtract' should be detected as unused");
-        assert!(!used.contains("multiply"), "'multiply' should be detected as unused");
+        assert!(
+            !used.contains("subtract"),
+            "'subtract' should be detected as unused"
+        );
+        assert!(
+            !used.contains("multiply"),
+            "'multiply' should be detected as unused"
+        );
     }
 }

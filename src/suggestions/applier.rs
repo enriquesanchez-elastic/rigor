@@ -11,11 +11,7 @@ pub fn extract_code_block(output: &str) -> Option<String> {
     for marker in start_markers {
         if let Some(i) = output.find(marker) {
             let after = i + marker.len();
-            let from = after
-                + output[after..]
-                    .find('\n')
-                    .map(|j| j + 1)
-                    .unwrap_or(0);
+            let from = after + output[after..].find('\n').map(|j| j + 1).unwrap_or(0);
             if let Some(end_off) = output[from..].find("```") {
                 let code = output[from..from + end_off].trim();
                 return Some(code.to_string());

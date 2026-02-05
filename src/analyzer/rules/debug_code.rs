@@ -34,19 +34,19 @@ impl AnalysisRule for DebugCodeRule {
             // Skip comment-only lines (we don't flag comments that contain console.log as debug)
             if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
                 // But do check for commented-out tests
-                if trimmed.contains("it(") || trimmed.contains("test(") {
-                    if (trimmed.contains("// it(") || trimmed.contains("// test("))
-                        && !trimmed.contains("rigor-ignore")
-                    {
-                        issues.push(Issue {
-                            rule: Rule::DebugCode,
-                            severity: Severity::Info,
-                            message: "Commented-out test code - remove or restore the test"
-                                .to_string(),
-                            location: Location::new(line_no, 1),
-                            suggestion: Some("Delete commented code or uncomment to run the test".to_string()),
-                        });
-                    }
+                if (trimmed.contains("it(") || trimmed.contains("test("))
+                    && (trimmed.contains("// it(") || trimmed.contains("// test("))
+                    && !trimmed.contains("rigor-ignore")
+                {
+                    issues.push(Issue {
+                        rule: Rule::DebugCode,
+                        severity: Severity::Info,
+                        message: "Commented-out test code - remove or restore the test".to_string(),
+                        location: Location::new(line_no, 1),
+                        suggestion: Some(
+                            "Delete commented code or uncomment to run the test".to_string(),
+                        ),
+                    });
                 }
                 continue;
             }
@@ -59,7 +59,9 @@ impl AnalysisRule for DebugCodeRule {
                         severity: Severity::Info,
                         message: "Test contains console.log - remove debugging code".to_string(),
                         location: Location::new(line_no, 1),
-                        suggestion: Some("Remove console.log or use a proper logging mock".to_string()),
+                        suggestion: Some(
+                            "Remove console.log or use a proper logging mock".to_string(),
+                        ),
                     });
                 } else if trimmed.contains("console.debug(") {
                     issues.push(Issue {
@@ -133,10 +135,7 @@ impl AnalysisRule for DebugCodeRule {
     fn calculate_score(&self, _tests: &[TestCase], issues: &[Issue]) -> u8 {
         let mut score: i32 = 25;
 
-        let debug_count = issues
-            .iter()
-            .filter(|i| i.rule == Rule::DebugCode)
-            .count();
+        let debug_count = issues.iter().filter(|i| i.rule == Rule::DebugCode).count();
         let focused_count = issues
             .iter()
             .filter(|i| i.rule == Rule::FocusedTest)

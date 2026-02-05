@@ -1,7 +1,7 @@
 //! Console reporter with colored output
 
-use crate::analyzer::scoring::ScoreCalculator;
 use crate::analyzer::engine::AggregateStats;
+use crate::analyzer::scoring::ScoreCalculator;
 use crate::{AnalysisResult, Grade, Issue, Severity};
 use colored::Colorize;
 
@@ -77,9 +77,7 @@ impl ConsoleReporter {
         );
         println!(
             "   Framework: {} | Tests: {} | Assertions: {}",
-            result.framework,
-            result.stats.total_tests,
-            result.stats.total_assertions
+            result.framework, result.stats.total_tests, result.stats.total_assertions
         );
         if let Some(ref source) = result.source_file {
             println!("   Source: {}", source.display());

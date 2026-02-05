@@ -49,9 +49,8 @@ impl std::error::Error for ClaudeError {}
 impl ClaudeClient {
     /// Create a new Claude client using ANTHROPIC_API_KEY from environment
     pub fn from_env() -> Result<Self, ClaudeError> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| ClaudeError::NoApiKey)?;
-        
+        let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| ClaudeError::NoApiKey)?;
+
         Ok(Self {
             api_key,
             model: "claude-sonnet-4-20250514".to_string(),
@@ -78,10 +77,10 @@ impl ClaudeClient {
     #[cfg(feature = "ai")]
     pub fn improve_tests(&self, result: &AnalysisResult) -> Result<ClaudeResponse, ClaudeError> {
         use super::AiSuggestionGenerator;
-        
+
         let generator = AiSuggestionGenerator::new();
         let prompt = generator.generate_prompt(result);
-        
+
         self.send_request(&prompt)
     }
 
@@ -89,9 +88,9 @@ impl ClaudeClient {
     #[cfg(feature = "ai")]
     pub fn send_request(&self, prompt: &str) -> Result<ClaudeResponse, ClaudeError> {
         use serde_json::json;
-        
+
         let client = reqwest::blocking::Client::new();
-        
+
         let body = json!({
             "model": self.model,
             "max_tokens": 8192,
@@ -113,11 +112,11 @@ impl ClaudeClient {
             .map_err(|e| ClaudeError::RequestFailed(e.to_string()))?;
 
         let status = response.status();
-        
+
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(ClaudeError::RateLimited);
         }
-        
+
         if !status.is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(ClaudeError::ApiError(format!("{}: {}", status, error_text)));
@@ -135,8 +134,7 @@ impl ClaudeClient {
             .ok_or_else(|| ClaudeError::InvalidResponse("No content in response".to_string()))?;
 
         // Extract code block from response
-        let code = super::extract_code_block(content)
-            .unwrap_or_else(|| content.to_string());
+        let code = super::extract_code_block(content).unwrap_or_else(|| content.to_string());
 
         let tokens = json["usage"]["output_tokens"].as_u64().map(|t| t as u32);
 
@@ -150,14 +148,14 @@ impl ClaudeClient {
     #[cfg(not(feature = "ai"))]
     pub fn improve_tests(&self, _result: &AnalysisResult) -> Result<ClaudeResponse, ClaudeError> {
         Err(ClaudeError::RequestFailed(
-            "AI feature not enabled. Rebuild with: cargo build --features ai".to_string()
+            "AI feature not enabled. Rebuild with: cargo build --features ai".to_string(),
         ))
     }
 
     #[cfg(not(feature = "ai"))]
     pub fn send_request(&self, _prompt: &str) -> Result<ClaudeResponse, ClaudeError> {
         Err(ClaudeError::RequestFailed(
-            "AI feature not enabled. Rebuild with: cargo build --features ai".to_string()
+            "AI feature not enabled. Rebuild with: cargo build --features ai".to_string(),
         ))
     }
 }

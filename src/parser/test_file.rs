@@ -24,15 +24,15 @@ impl<'a> TestFileParser<'a> {
     /// Extract test statistics
     pub fn extract_stats(&self, tree: &Tree) -> TestStats {
         let tests = self.extract_tests(tree);
-        let mut stats = TestStats::default();
 
-        stats.total_tests = tests.len();
-        stats.skipped_tests = tests.iter().filter(|t| t.is_skipped).count();
-        stats.async_tests = tests.iter().filter(|t| t.is_async).count();
-        stats.total_assertions = tests.iter().map(|t| t.assertions.len()).sum();
-        stats.describe_blocks = self.count_describe_blocks(tree.root_node());
-
-        stats
+        TestStats {
+            total_tests: tests.len(),
+            skipped_tests: tests.iter().filter(|t| t.is_skipped).count(),
+            async_tests: tests.iter().filter(|t| t.is_async).count(),
+            total_assertions: tests.iter().map(|t| t.assertions.len()).sum(),
+            describe_blocks: self.count_describe_blocks(tree.root_node()),
+            ..Default::default()
+        }
     }
 
     fn visit_node(&self, node: Node, tests: &mut Vec<TestCase>, current_describe: Option<&str>) {
@@ -239,7 +239,7 @@ impl<'a> TestFileParser<'a> {
         if function.kind() == "member_expression" {
             let property = function.child_by_field_name("property")?;
             let prop_name = self.node_text(property);
-            
+
             if prop_name == "should" {
                 let args = node.child_by_field_name("arguments")?;
                 let mut cursor = args.walk();
@@ -260,7 +260,7 @@ impl<'a> TestFileParser<'a> {
                 });
             }
         }
-        
+
         // Check for Cypress implicit assertions (cy.contains, cy.url, cy.intercept, etc.)
         if let Some(assertion) = self.try_parse_cypress_implicit_assertion(node) {
             return Some(assertion);
@@ -268,16 +268,16 @@ impl<'a> TestFileParser<'a> {
 
         None
     }
-    
+
     /// Try to parse Cypress implicit assertions (commands that implicitly assert)
     fn try_parse_cypress_implicit_assertion(&self, node: Node) -> Option<Assertion> {
         let function = node.child_by_field_name("function")?;
-        
+
         // Check if this is a Cypress command chain rooted at 'cy'
         if !self.is_cypress_chain(function) {
             return None;
         }
-        
+
         // Get the final method name in the chain
         let method_name = if function.kind() == "member_expression" {
             let property = function.child_by_field_name("property")?;
@@ -285,13 +285,13 @@ impl<'a> TestFileParser<'a> {
         } else {
             return None;
         };
-        
+
         let kind = match method_name {
             "contains" => AssertionKind::CyContains,
             "url" => AssertionKind::CyUrl,
             "intercept" => AssertionKind::CyIntercept,
             "visit" => AssertionKind::CyVisit,
-            "click" | "type" | "clear" | "check" | "uncheck" | "select" | "focus" | "blur" 
+            "click" | "type" | "clear" | "check" | "uncheck" | "select" | "focus" | "blur"
             | "submit" | "trigger" | "scrollTo" | "scrollIntoView" | "dblclick" | "rightclick" => {
                 AssertionKind::CyAction
             }
@@ -305,12 +305,12 @@ impl<'a> TestFileParser<'a> {
             }
             _ => return None,
         };
-        
+
         let location = Location::new(
             node.start_position().row + 1,
             node.start_position().column + 1,
         );
-        
+
         Some(Assertion {
             kind: kind.clone(),
             quality: kind.quality(),
@@ -318,7 +318,7 @@ impl<'a> TestFileParser<'a> {
             raw: self.node_text(node).to_string(),
         })
     }
-    
+
     /// Check if a call expression is part of a Cypress chain (rooted at 'cy')
     fn is_cypress_chain(&self, node: Node) -> bool {
         match node.kind() {
@@ -340,7 +340,7 @@ impl<'a> TestFileParser<'a> {
             _ => false,
         }
     }
-    
+
     /// Check if any parent/sibling in the chain has a .should() call
     fn has_should_in_chain(&self, node: Node) -> bool {
         // Walk up to find if we're part of a longer chain that includes .should()
@@ -380,8 +380,12 @@ impl<'a> TestFileParser<'a> {
             "have.class" => AssertionKind::CyShouldHaveAttr,
             "have.css" => AssertionKind::CyShouldHaveAttr,
             // State assertions
-            "be.enabled" | "be.checked" | "be.selected" | "be.focused" => AssertionKind::CyShouldBeVisible,
-            "not.exist" | "not.be.visible" | "be.empty" | "be.hidden" => AssertionKind::CyShouldExist,
+            "be.enabled" | "be.checked" | "be.selected" | "be.focused" => {
+                AssertionKind::CyShouldBeVisible
+            }
+            "not.exist" | "not.be.visible" | "be.empty" | "be.hidden" => {
+                AssertionKind::CyShouldExist
+            }
             other => AssertionKind::Unknown(other.to_string()),
         }
     }
@@ -552,9 +556,18 @@ mod tests {
 
         assert_eq!(tests.len(), 1);
         assert_eq!(tests[0].assertions.len(), 3);
-        assert!(matches!(tests[0].assertions[0].kind, AssertionKind::CyShouldExist));
-        assert!(matches!(tests[0].assertions[1].kind, AssertionKind::CyShouldBeVisible));
-        assert!(matches!(tests[0].assertions[2].kind, AssertionKind::CyShouldHaveText));
+        assert!(matches!(
+            tests[0].assertions[0].kind,
+            AssertionKind::CyShouldExist
+        ));
+        assert!(matches!(
+            tests[0].assertions[1].kind,
+            AssertionKind::CyShouldBeVisible
+        ));
+        assert!(matches!(
+            tests[0].assertions[2].kind,
+            AssertionKind::CyShouldHaveText
+        ));
     }
 
     #[test]
@@ -576,13 +589,35 @@ mod tests {
 
         assert_eq!(tests.len(), 1);
         // Should detect: visit, contains, url().should(), intercept, get().click()
-        assert!(tests[0].assertions.len() >= 4, "Expected at least 4 assertions, got {}", tests[0].assertions.len());
-        
+        assert!(
+            tests[0].assertions.len() >= 4,
+            "Expected at least 4 assertions, got {}",
+            tests[0].assertions.len()
+        );
+
         // Check for CyVisit
-        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyVisit)), "Should detect cy.visit()");
+        assert!(
+            tests[0]
+                .assertions
+                .iter()
+                .any(|a| matches!(a.kind, AssertionKind::CyVisit)),
+            "Should detect cy.visit()"
+        );
         // Check for CyContains
-        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyContains)), "Should detect cy.contains()");
+        assert!(
+            tests[0]
+                .assertions
+                .iter()
+                .any(|a| matches!(a.kind, AssertionKind::CyContains)),
+            "Should detect cy.contains()"
+        );
         // Check for CyIntercept
-        assert!(tests[0].assertions.iter().any(|a| matches!(a.kind, AssertionKind::CyIntercept)), "Should detect cy.intercept()");
+        assert!(
+            tests[0]
+                .assertions
+                .iter()
+                .any(|a| matches!(a.kind, AssertionKind::CyIntercept)),
+            "Should detect cy.intercept()"
+        );
     }
 }

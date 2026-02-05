@@ -62,7 +62,7 @@ impl AnalysisCache {
     pub fn new(project_root: &Path) -> Self {
         let cache_path = project_root.join(CACHE_FILENAME);
         let data = Self::load_cache(&cache_path).unwrap_or_default();
-        
+
         Self {
             cache_path,
             data,
@@ -85,12 +85,12 @@ impl AnalysisCache {
     fn load_cache(path: &Path) -> Option<CacheData> {
         let content = fs::read_to_string(path).ok()?;
         let data: CacheData = serde_json::from_str(&content).ok()?;
-        
+
         // Check version compatibility
         if data.version != CACHE_VERSION {
             return None;
         }
-        
+
         Some(data)
     }
 
@@ -99,12 +99,12 @@ impl AnalysisCache {
         if !self.enabled || !self.dirty {
             return Ok(());
         }
-        
-        let content = serde_json::to_string_pretty(&self.data)
-            .context("Failed to serialize cache")?;
+
+        let content =
+            serde_json::to_string_pretty(&self.data).context("Failed to serialize cache")?;
         fs::write(&self.cache_path, content)
             .with_context(|| format!("Failed to write cache to {}", self.cache_path.display()))?;
-        
+
         Ok(())
     }
 
@@ -116,20 +116,25 @@ impl AnalysisCache {
     }
 
     /// Get cached result if still valid
-    pub fn get(&self, test_path: &Path, test_content: &str, source_content: Option<&str>) -> Option<AnalysisResult> {
+    pub fn get(
+        &self,
+        test_path: &Path,
+        test_content: &str,
+        source_content: Option<&str>,
+    ) -> Option<AnalysisResult> {
         if !self.enabled {
             return None;
         }
-        
+
         let key = test_path.to_string_lossy().to_string();
         let entry = self.data.entries.get(&key)?;
-        
+
         // Check if test file hash matches
         let current_hash = Self::hash_content(test_content);
         if entry.content_hash != current_hash {
             return None;
         }
-        
+
         // Check if source file hash matches (if applicable)
         match (source_content, &entry.source_hash) {
             (Some(content), Some(cached_hash)) => {
@@ -141,7 +146,7 @@ impl AnalysisCache {
             (None, None) => {}
             _ => return None, // Source presence changed
         }
-        
+
         Some(entry.result.clone())
     }
 
@@ -156,7 +161,7 @@ impl AnalysisCache {
         if !self.enabled {
             return;
         }
-        
+
         let key = test_path.to_string_lossy().to_string();
         let entry = CacheEntry {
             content_hash: Self::hash_content(test_content),
@@ -167,7 +172,7 @@ impl AnalysisCache {
                 .map(|d| d.as_secs())
                 .unwrap_or(0),
         };
-        
+
         self.data.entries.insert(key, entry);
         self.dirty = true;
     }
@@ -177,12 +182,12 @@ impl AnalysisCache {
         if !self.enabled {
             return;
         }
-        
+
         let existing_set: std::collections::HashSet<String> = existing_files
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect();
-        
+
         self.data.entries.retain(|k, _| existing_set.contains(k));
         self.dirty = true;
     }
@@ -218,7 +223,7 @@ mod tests {
         let hash1 = AnalysisCache::hash_content("test content");
         let hash2 = AnalysisCache::hash_content("test content");
         let hash3 = AnalysisCache::hash_content("different content");
-        
+
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
     }

@@ -14,10 +14,7 @@ pub struct TestWatcher {
 }
 
 fn is_create_or_modify(kind: &EventKind) -> bool {
-    matches!(
-        kind,
-        EventKind::Create(_) | EventKind::Modify(_)
-    )
+    matches!(kind, EventKind::Create(_) | EventKind::Modify(_))
 }
 
 impl TestWatcher {
@@ -53,8 +50,14 @@ impl TestWatcher {
             return false;
         }
         [
-            ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx",
-            ".test.js", ".test.jsx", ".spec.js", ".spec.jsx",
+            ".test.ts",
+            ".test.tsx",
+            ".spec.ts",
+            ".spec.tsx",
+            ".test.js",
+            ".test.jsx",
+            ".spec.js",
+            ".spec.jsx",
         ]
         .iter()
         .any(|suffix| name.ends_with(suffix))

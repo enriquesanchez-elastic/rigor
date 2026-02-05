@@ -9,11 +9,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::rules::{
-    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule, BehavioralCompletenessRule,
-    BoundaryConditionsRule, BoundarySpecificityRule, CouplingAnalysisRule, DebugCodeRule, ErrorCoverageRule,
-    FlakyPatternsRule, InputVarietyRule, MockAbuseRule, MutationResistantRule, NamingQualityRule,
-    ReactTestingLibraryRule, ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule,
-    TestIsolationRule, TrivialAssertionRule,
+    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule,
+    BehavioralCompletenessRule, BoundaryConditionsRule, BoundarySpecificityRule,
+    CouplingAnalysisRule, DebugCodeRule, ErrorCoverageRule, FlakyPatternsRule, InputVarietyRule,
+    MockAbuseRule, MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule,
+    ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule, TestIsolationRule,
+    TrivialAssertionRule,
 };
 use super::ScoreCalculator;
 
@@ -119,8 +120,7 @@ impl AnalysisEngine {
         // Determine if source analysis should be skipped for this file
         let skip_source = if let Some(cfg) = config {
             let effective = cfg.effective_for_file(test_path);
-            effective.skip_source_analysis
-                || cfg.source_mapping.mode == SourceMappingMode::Off
+            effective.skip_source_analysis || cfg.source_mapping.mode == SourceMappingMode::Off
         } else {
             false
         };
@@ -163,7 +163,7 @@ impl AnalysisEngine {
         } else {
             (None, None)
         };
-        
+
         // Calculate function coverage if source is available
         if let (Some(ref src_content), Some(ref src_tree)) = (&source_content, &source_tree) {
             let source_parser = SourceFileParser::new(src_content);
@@ -173,16 +173,18 @@ impl AnalysisEngine {
 
         // Run all rules
         let assertion_rule = AssertionQualityRule::new();
-        let error_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-            ErrorCoverageRule::new().with_source(content, tree)
-        } else {
-            ErrorCoverageRule::new()
-        };
-        let boundary_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-            BoundaryConditionsRule::new().with_source(content, tree)
-        } else {
-            BoundaryConditionsRule::new()
-        };
+        let error_rule =
+            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+                ErrorCoverageRule::new().with_source(content, tree)
+            } else {
+                ErrorCoverageRule::new()
+            };
+        let boundary_rule =
+            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+                BoundaryConditionsRule::new().with_source(content, tree)
+            } else {
+                BoundaryConditionsRule::new()
+            };
         let isolation_rule = TestIsolationRule::new();
         let variety_rule = InputVarietyRule::new();
         let debug_rule = DebugCodeRule::new();
@@ -196,21 +198,24 @@ impl AnalysisEngine {
         let state_verification_rule = StateVerificationRule::new();
         let assertion_intent_rule = AssertionIntentRule::new();
         let trivial_assertion_rule = TrivialAssertionRule::new();
-        let return_path_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-            ReturnPathCoverageRule::new().with_source(content, tree)
-        } else {
-            ReturnPathCoverageRule::new()
-        };
-        let behavioral_completeness_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-            BehavioralCompletenessRule::new().with_source(content, tree)
-        } else {
-            BehavioralCompletenessRule::new()
-        };
-        let side_effect_rule = if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-            SideEffectVerificationRule::new().with_source(content, tree)
-        } else {
-            SideEffectVerificationRule::new()
-        };
+        let return_path_rule =
+            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+                ReturnPathCoverageRule::new().with_source(content, tree)
+            } else {
+                ReturnPathCoverageRule::new()
+            };
+        let behavioral_completeness_rule =
+            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+                BehavioralCompletenessRule::new().with_source(content, tree)
+            } else {
+                BehavioralCompletenessRule::new()
+            };
+        let side_effect_rule =
+            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+                SideEffectVerificationRule::new().with_source(content, tree)
+            } else {
+                SideEffectVerificationRule::new()
+            };
 
         // Collect all issues
         let mut issues = Vec::new();
@@ -236,8 +241,8 @@ impl AnalysisEngine {
 
         // Run coupling analysis if we have function coverage data
         if let Some(ref fc) = stats.function_coverage {
-            let coupling_rule = CouplingAnalysisRule::new()
-                .with_source_exports(fc.untested_exports.clone());
+            let coupling_rule =
+                CouplingAnalysisRule::new().with_source_exports(fc.untested_exports.clone());
             issues.extend(coupling_rule.analyze(&tests, &source, &tree));
         }
 
@@ -279,18 +284,23 @@ impl AnalysisEngine {
     }
 
     /// Analyze multiple test files sequentially
-    pub fn analyze_many(&self, paths: &[&Path], config: Option<&Config>) -> Vec<Result<AnalysisResult>> {
+    pub fn analyze_many(
+        &self,
+        paths: &[&Path],
+        config: Option<&Config>,
+    ) -> Vec<Result<AnalysisResult>> {
         paths.iter().map(|p| self.analyze(p, config)).collect()
     }
 
     /// Analyze multiple test files in parallel using rayon
-    pub fn analyze_parallel(&self, paths: &[PathBuf], config: Option<&Config>) -> Vec<Result<AnalysisResult>> {
+    pub fn analyze_parallel(
+        &self,
+        paths: &[PathBuf],
+        config: Option<&Config>,
+    ) -> Vec<Result<AnalysisResult>> {
         use rayon::prelude::*;
-        
-        paths
-            .par_iter()
-            .map(|p| self.analyze(p, config))
-            .collect()
+
+        paths.par_iter().map(|p| self.analyze(p, config)).collect()
     }
 
     /// Get aggregate stats from multiple results
@@ -398,7 +408,10 @@ mod tests {
         let result = engine.analyze(file.path(), None).unwrap();
 
         assert_eq!(result.stats.total_tests, 2);
-        assert!(!result.issues.is_empty(), "should report weak/trivial issues");
+        assert!(
+            !result.issues.is_empty(),
+            "should report weak/trivial issues"
+        );
         // Many issues (weak assertions, trivial, vague names) should pull score down to C or worse
         assert!(
             result.score.value < 80,

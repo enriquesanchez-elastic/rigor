@@ -13,13 +13,17 @@ pub fn select_mutations(mutations: &[Mutation], count: usize) -> Vec<Mutation> {
 
     // Prefer >=, <=, >, < (boundary), then true/false, then arithmetic
     let priority = |m: &Mutation| -> u8 {
-        if m.description.starts_with(">=") || m.description.starts_with("<=")
-            || m.description.starts_with("> to") || m.description.starts_with("< to")
+        if m.description.starts_with(">=")
+            || m.description.starts_with("<=")
+            || m.description.starts_with("> to")
+            || m.description.starts_with("< to")
         {
             3
-        } else if m.description.contains("true") || m.description.contains("false") {
-            2
-        } else if m.description.starts_with("=== ") || m.description.starts_with("!= ") {
+        } else if m.description.contains("true")
+            || m.description.contains("false")
+            || m.description.starts_with("=== ")
+            || m.description.starts_with("!= ")
+        {
             2
         } else {
             1
@@ -34,7 +38,5 @@ pub fn select_mutations(mutations: &[Mutation], count: usize) -> Vec<Mutation> {
     indexed.sort_by(|a, b| b.1.cmp(&a.1));
 
     let take: Vec<usize> = indexed.into_iter().take(count).map(|(i, _)| i).collect();
-    take.into_iter()
-        .map(|i| mutations[i].clone())
-        .collect()
+    take.into_iter().map(|i| mutations[i].clone()).collect()
 }

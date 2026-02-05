@@ -155,14 +155,14 @@ impl<'a> SourceFileParser<'a> {
         self.visit_for_boundaries(tree.root_node(), &mut conditions, None);
         conditions
     }
-    
+
     /// Extract all exports from the source file
     pub fn extract_exports(&self, tree: &Tree) -> Vec<ExportedItem> {
         let mut exports = Vec::new();
         self.visit_for_exports(tree.root_node(), &mut exports);
         exports
     }
-    
+
     /// Extract detailed function info for meaningfulness analysis
     pub fn extract_function_details(&self, tree: &Tree) -> Vec<FunctionDetails> {
         let mut functions = Vec::new();
@@ -174,10 +174,10 @@ impl<'a> SourceFileParser<'a> {
     pub fn calculate_coverage(&self, tree: &Tree, test_source: &str) -> FunctionCoverage {
         let exports = self.extract_exports(tree);
         let test_lower = test_source.to_lowercase();
-        
+
         let mut tested = Vec::new();
         let mut untested = Vec::new();
-        
+
         for export in &exports {
             let name_lower = export.name.to_lowercase();
             // Check if the export name appears in the test file
@@ -188,7 +188,7 @@ impl<'a> SourceFileParser<'a> {
                 untested.push(export.name.clone());
             }
         }
-        
+
         let total = exports.len();
         let covered = tested.len();
         let percent = if total > 0 {
@@ -196,7 +196,7 @@ impl<'a> SourceFileParser<'a> {
         } else {
             100 // No exports = 100% covered
         };
-        
+
         FunctionCoverage {
             total_exports: total,
             covered_exports: covered,
@@ -205,7 +205,7 @@ impl<'a> SourceFileParser<'a> {
             tested_exports: tested,
         }
     }
-    
+
     fn visit_for_exports(&self, node: Node, exports: &mut Vec<ExportedItem>) {
         match node.kind() {
             // export function name() {}
@@ -234,13 +234,13 @@ impl<'a> SourceFileParser<'a> {
             }
             _ => {}
         }
-        
+
         // Recurse
         for child in node.named_children(&mut node.walk()) {
             self.visit_for_exports(child, exports);
         }
     }
-    
+
     fn extract_export_items(&self, export_node: Node, exports: &mut Vec<ExportedItem>) {
         for child in export_node.named_children(&mut export_node.walk()) {
             match child.kind() {
@@ -319,11 +319,10 @@ impl<'a> SourceFileParser<'a> {
                     // Check next sibling for the actual export
                     if let Some(sibling) = child.next_named_sibling() {
                         let name = match sibling.kind() {
-                            "function_declaration" | "class_declaration" => {
-                                sibling.child_by_field_name("name")
-                                    .map(|n| self.node_text(n).to_string())
-                                    .unwrap_or_else(|| "default".to_string())
-                            }
+                            "function_declaration" | "class_declaration" => sibling
+                                .child_by_field_name("name")
+                                .map(|n| self.node_text(n).to_string())
+                                .unwrap_or_else(|| "default".to_string()),
                             _ => "default".to_string(),
                         };
                         let location = Location::new(
@@ -350,14 +349,8 @@ impl<'a> SourceFileParser<'a> {
     ) {
         // Track current function context
         let fn_name = match node.kind() {
-            "function_declaration" => {
-                node.child_by_field_name("name")
-                    .map(|n| self.node_text(n))
-            }
-            "method_definition" => {
-                node.child_by_field_name("name")
-                    .map(|n| self.node_text(n))
-            }
+            "function_declaration" => node.child_by_field_name("name").map(|n| self.node_text(n)),
+            "method_definition" => node.child_by_field_name("name").map(|n| self.node_text(n)),
             "arrow_function" | "function_expression" => {
                 // Try to get name from parent variable declaration
                 if let Some(parent) = node.parent() {
@@ -442,10 +435,9 @@ impl<'a> SourceFileParser<'a> {
     ) {
         // Track context (function/method name)
         let ctx = match node.kind() {
-            "function_declaration" | "method_definition" => {
-                node.child_by_field_name("name")
-                    .map(|n| self.node_text(n).to_string())
-            }
+            "function_declaration" | "method_definition" => node
+                .child_by_field_name("name")
+                .map(|n| self.node_text(n).to_string()),
             _ => context.map(String::from),
         };
 
@@ -453,7 +445,10 @@ impl<'a> SourceFileParser<'a> {
         if node.kind() == "binary_expression" {
             if let Some(op_node) = node.child_by_field_name("operator") {
                 let operator = self.node_text(op_node);
-                if matches!(operator, "<" | ">" | "<=" | ">=" | "==" | "===" | "!=" | "!==") {
+                if matches!(
+                    operator,
+                    "<" | ">" | "<=" | ">=" | "==" | "===" | "!=" | "!=="
+                ) {
                     // Try to extract constant value
                     let value = self.extract_comparison_value(node);
                     let location = Location::new(
@@ -511,7 +506,9 @@ impl<'a> SourceFileParser<'a> {
     }
 
     fn parse_function_details(&self, node: Node) -> Option<FunctionDetails> {
-        let name = self.get_function_name(node).unwrap_or_else(|| "anonymous".to_string());
+        let name = self
+            .get_function_name(node)
+            .unwrap_or_else(|| "anonymous".to_string());
         let location = Location::new(
             node.start_position().row + 1,
             node.start_position().column + 1,
@@ -538,24 +535,22 @@ impl<'a> SourceFileParser<'a> {
 
     fn get_function_name(&self, node: Node) -> Option<String> {
         match node.kind() {
-            "function_declaration" | "method_definition" => {
-                node.child_by_field_name("name").map(|n| self.node_text(n).to_string())
-            }
-            "arrow_function" | "function_expression" => {
-                node.parent().and_then(|parent| {
-                    if parent.kind() == "variable_declarator" {
-                        parent
-                            .child_by_field_name("name")
-                            .map(|n| self.node_text(n).to_string())
-                    } else if parent.kind() == "method_definition" {
-                        parent
-                            .child_by_field_name("name")
-                            .map(|n| self.node_text(n).to_string())
-                    } else {
-                        Some("anonymous".to_string())
-                    }
-                })
-            }
+            "function_declaration" | "method_definition" => node
+                .child_by_field_name("name")
+                .map(|n| self.node_text(n).to_string()),
+            "arrow_function" | "function_expression" => node.parent().and_then(|parent| {
+                if parent.kind() == "variable_declarator" {
+                    parent
+                        .child_by_field_name("name")
+                        .map(|n| self.node_text(n).to_string())
+                } else if parent.kind() == "method_definition" {
+                    parent
+                        .child_by_field_name("name")
+                        .map(|n| self.node_text(n).to_string())
+                } else {
+                    Some("anonymous".to_string())
+                }
+            }),
             _ => None,
         }
     }
@@ -580,12 +575,10 @@ impl<'a> SourceFileParser<'a> {
                         type_annotation,
                     });
                 }
-            } else if child.kind() == "required_parameter"
-                || child.kind() == "optional_parameter"
-            {
-                let name_node = child.child_by_field_name("name").or_else(|| {
-                    child.named_children(&mut child.walk()).next()
-                });
+            } else if child.kind() == "required_parameter" || child.kind() == "optional_parameter" {
+                let name_node = child
+                    .child_by_field_name("name")
+                    .or_else(|| child.named_children(&mut child.walk()).next());
                 if let Some(n) = name_node {
                     let name = self.node_text(n).to_string();
                     if !name.is_empty() && name != "this" {
@@ -721,8 +714,12 @@ impl<'a> SourceFileParser<'a> {
                 let method = if function.kind() == "member_expression" {
                     let prop = function.child_by_field_name("property");
                     let obj = function.child_by_field_name("object");
-                    let target = obj.map(|o| self.node_text(o).to_string()).unwrap_or_default();
-                    let method_name = prop.map(|p| self.node_text(p).to_string()).unwrap_or_default();
+                    let target = obj
+                        .map(|o| self.node_text(o).to_string())
+                        .unwrap_or_default();
+                    let method_name = prop
+                        .map(|p| self.node_text(p).to_string())
+                        .unwrap_or_default();
                     let kind = match method_name.as_str() {
                         "push" => Some(MutationKind::ArrayPush),
                         "pop" => Some(MutationKind::ArrayPop),
@@ -742,14 +739,20 @@ impl<'a> SourceFileParser<'a> {
                         node.start_position().row + 1,
                         node.start_position().column + 1,
                     );
-                    out.push(Mutation { target, kind, location });
+                    out.push(Mutation {
+                        target,
+                        kind,
+                        location,
+                    });
                 }
             }
         }
 
         if node.kind() == "assignment_expression" {
             let left = node.child_by_field_name("left");
-            let target = left.map(|l| self.node_text(l).to_string()).unwrap_or_default();
+            let target = left
+                .map(|l| self.node_text(l).to_string())
+                .unwrap_or_default();
             let location = Location::new(
                 node.start_position().row + 1,
                 node.start_position().column + 1,
@@ -892,7 +895,7 @@ mod tests {
         assert_eq!(boundaries[0].operator, ">=");
         assert_eq!(boundaries[0].value, Some("18".to_string()));
     }
-    
+
     #[test]
     fn test_extract_exports() {
         let source = r#"
@@ -919,16 +922,26 @@ mod tests {
         let source_parser = SourceFileParser::new(source);
         let exports = source_parser.extract_exports(&tree);
 
-        assert!(exports.len() >= 4, "Expected at least 4 exports, got {}", exports.len());
-        
+        assert!(
+            exports.len() >= 4,
+            "Expected at least 4 exports, got {}",
+            exports.len()
+        );
+
         let names: Vec<&str> = exports.iter().map(|e| e.name.as_str()).collect();
-        assert!(names.contains(&"validateEmail"), "Should export validateEmail");
+        assert!(
+            names.contains(&"validateEmail"),
+            "Should export validateEmail"
+        );
         assert!(names.contains(&"MAX_LENGTH"), "Should export MAX_LENGTH");
         assert!(names.contains(&"UserService"), "Should export UserService");
         assert!(names.contains(&"User"), "Should export User interface");
-        assert!(!names.contains(&"privateHelper"), "Should NOT export privateHelper");
+        assert!(
+            !names.contains(&"privateHelper"),
+            "Should NOT export privateHelper"
+        );
     }
-    
+
     #[test]
     fn test_calculate_coverage() {
         let source = r#"
@@ -944,7 +957,7 @@ mod tests {
                 return a * b;
             }
         "#;
-        
+
         let test_source = r#"
             describe('math', () => {
                 it('adds numbers', () => {
@@ -998,7 +1011,10 @@ mod tests {
         let add_item = details.iter().find(|f| f.name == "addItem");
         if let Some(f) = add_item {
             assert!(!f.mutations.is_empty(), "addItem should have push mutation");
-            assert!(f.mutations.iter().any(|m| m.kind == MutationKind::ArrayPush));
+            assert!(f
+                .mutations
+                .iter()
+                .any(|m| m.kind == MutationKind::ArrayPush));
         }
     }
 }

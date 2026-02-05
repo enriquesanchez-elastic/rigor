@@ -279,7 +279,10 @@ mod tests {
             .filter(|m| m.description.contains("return"))
             .collect();
         assert!(!return_ops.is_empty());
-        let null_mut = mutations.iter().find(|m| m.replacement == "return null;").unwrap();
+        let null_mut = mutations
+            .iter()
+            .find(|m| m.replacement == "return null;")
+            .unwrap();
         let applied = apply_mutation(s, null_mut);
         assert!(applied.contains("return null;"));
     }
@@ -290,7 +293,12 @@ mod tests {
         let mutations = generate_mutations(s);
         let inc_ops: Vec<_> = mutations
             .iter()
-            .filter(|m| m.description.contains("++") || m.description.contains("--") || m.description.contains("+=") || m.description.contains("-="))
+            .filter(|m| {
+                m.description.contains("++")
+                    || m.description.contains("--")
+                    || m.description.contains("+=")
+                    || m.description.contains("-=")
+            })
             .collect();
         assert!(!inc_ops.is_empty());
     }
@@ -303,7 +311,10 @@ mod tests {
             .iter()
             .filter(|m| m.description.contains("optional chaining"))
             .collect();
-        assert!(!ts_ops.is_empty(), "Should have optional chaining mutations");
+        assert!(
+            !ts_ops.is_empty(),
+            "Should have optional chaining mutations"
+        );
     }
 
     #[test]
@@ -314,7 +325,10 @@ mod tests {
             .iter()
             .filter(|m| m.description.contains("nullish"))
             .collect();
-        assert!(!ts_ops.is_empty(), "Should have nullish coalescing mutations");
+        assert!(
+            !ts_ops.is_empty(),
+            "Should have nullish coalescing mutations"
+        );
     }
 
     #[test]
@@ -325,6 +339,9 @@ mod tests {
             .iter()
             .filter(|m| m.description.contains("non-null"))
             .collect();
-        assert!(!ts_ops.is_empty(), "Should have non-null assertion mutations");
+        assert!(
+            !ts_ops.is_empty(),
+            "Should have non-null assertion mutations"
+        );
     }
 }

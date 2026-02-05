@@ -33,7 +33,8 @@ impl AnalysisRule for MutationResistantRule {
             for assertion in &test.assertions {
                 let (flag, suggestion) = match &assertion.kind {
                     AssertionKind::ToBeGreaterThan | AssertionKind::ToBeLessThan => {
-                        if assertion.raw.contains("> 0") || assertion.raw.contains("< 1")
+                        if assertion.raw.contains("> 0")
+                            || assertion.raw.contains("< 1")
                             || assertion.raw.contains(">= 0")
                         {
                             (

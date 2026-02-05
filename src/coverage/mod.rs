@@ -2,7 +2,7 @@
 
 mod istanbul;
 
-pub use istanbul::{CoverageData, CoverageReport, FileCoverage, parse_istanbul_json};
+pub use istanbul::{parse_istanbul_json, CoverageData, CoverageReport, FileCoverage};
 
 use std::path::Path;
 
@@ -10,12 +10,12 @@ use std::path::Path;
 pub fn load_coverage(path: &Path) -> anyhow::Result<CoverageReport> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("Failed to read coverage file: {}", e))?;
-    
+
     // Try Istanbul/c8 JSON format
-    if path.extension().map_or(false, |ext| ext == "json") {
+    if path.extension().is_some_and(|ext| ext == "json") {
         return parse_istanbul_json(&content);
     }
-    
+
     // Default to Istanbul JSON
     parse_istanbul_json(&content)
 }

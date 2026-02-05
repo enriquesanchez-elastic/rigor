@@ -41,7 +41,11 @@ impl JsonReporter {
     }
 
     /// Report with summary
-    pub fn report_with_summary(&self, results: &[AnalysisResult], stats: &AggregateStats) -> String {
+    pub fn report_with_summary(
+        &self,
+        results: &[AnalysisResult],
+        stats: &AggregateStats,
+    ) -> String {
         let output = JsonOutput {
             results,
             summary: JsonSummary {

@@ -10,13 +10,13 @@ pub struct NamingQualityRule;
 
 fn vague_patterns() -> Vec<Regex> {
     vec![
-        Regex::new(r"^test\s*\d*$").unwrap(),    // "test", "test1", "test 2"
-        Regex::new(r"^it\s+works$").unwrap(),     // "it works"
-        Regex::new(r"^should\s+work$").unwrap(),  // "should work"
+        Regex::new(r"^test\s*\d*$").unwrap(), // "test", "test1", "test 2"
+        Regex::new(r"^it\s+works$").unwrap(), // "it works"
+        Regex::new(r"^should\s+work$").unwrap(), // "should work"
         Regex::new(r"^handles?\s+\w+$").unwrap(), // "handles data", "handle input"
-        Regex::new(r"^works\s*$").unwrap(),       // "works"
-        Regex::new(r"^test\s+\d+$").unwrap(),     // "test 1", "test 2"
-        Regex::new(r"^test\w*\d+$").unwrap(),    // "test1", "test2"
+        Regex::new(r"^works\s*$").unwrap(),   // "works"
+        Regex::new(r"^test\s+\d+$").unwrap(), // "test 1", "test 2"
+        Regex::new(r"^test\w*\d+$").unwrap(), // "test1", "test2"
     ]
 }
 
@@ -37,9 +37,24 @@ impl NamingQualityRule {
     fn has_no_verb(name: &str) -> bool {
         let name_lower = name.to_lowercase();
         let verbs = [
-            "should", "returns", "throws", "calls", "validates", "checks",
-            "accepts", "rejects", "renders", "displays", "handles", "loads",
-            "creates", "updates", "deletes", "fetches", "sends", "receives",
+            "should",
+            "returns",
+            "throws",
+            "calls",
+            "validates",
+            "checks",
+            "accepts",
+            "rejects",
+            "renders",
+            "displays",
+            "handles",
+            "loads",
+            "creates",
+            "updates",
+            "deletes",
+            "fetches",
+            "sends",
+            "receives",
         ];
         !verbs.iter().any(|v| name_lower.contains(v))
             && name_lower.split_whitespace().count() <= 3
@@ -52,7 +67,11 @@ impl NamingQualityRule {
         if !name_lower.contains("test") && !name_lower.contains("case") {
             return false;
         }
-        let ends_with_digit = name_lower.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false);
+        let ends_with_digit = name_lower
+            .chars()
+            .last()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false);
         if !ends_with_digit {
             return false;
         }
@@ -62,7 +81,9 @@ impl NamingQualityRule {
             .filter(|n| {
                 let a = n.to_lowercase();
                 let base_a = a.trim_end_matches(|c: char| c.is_ascii_digit()).to_string();
-                let base_b = name_lower.trim_end_matches(|c: char| c.is_ascii_digit()).to_string();
+                let base_b = name_lower
+                    .trim_end_matches(|c: char| c.is_ascii_digit())
+                    .to_string();
                 base_a == base_b
             })
             .count();
@@ -139,7 +160,7 @@ impl AnalysisRule for NamingQualityRule {
             .count();
         let mut score: i32 = 25;
         score -= (warnings as i32 * 3).min(12);
-        score -= (infos as i32 * 1).min(5);
+        score -= (infos as i32).min(5);
         score.clamp(0, 25) as u8
     }
 }
@@ -153,12 +174,18 @@ mod tests {
         assert!(NamingQualityRule::is_vague("test"));
         assert!(NamingQualityRule::is_vague("test1"));
         assert!(NamingQualityRule::is_vague("should work"));
-        assert!(!NamingQualityRule::is_vague("returns 404 when user not found"));
+        assert!(!NamingQualityRule::is_vague(
+            "returns 404 when user not found"
+        ));
     }
 
     #[test]
     fn test_sequential() {
-        let names = vec!["test1".to_string(), "test2".to_string(), "test3".to_string()];
+        let names = vec![
+            "test1".to_string(),
+            "test2".to_string(),
+            "test3".to_string(),
+        ];
         assert!(NamingQualityRule::is_sequential_name("test1", &names));
     }
 }
