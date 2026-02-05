@@ -139,7 +139,10 @@ mod tests {
             .unwrap();
         let tests = vec![make_test(
             "returns three",
-            vec![make_assertion(AssertionKind::ToBe, "expect(result).toBe(3)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(result).toBe(3)",
+            )],
         )];
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty());

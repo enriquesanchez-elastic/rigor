@@ -130,7 +130,10 @@ mod tests {
             .unwrap();
         let tests = vec![make_test(
             "boundary at 18",
-            vec![make_assertion(AssertionKind::ToBe, "expect(validateAge(18)).toBe(true)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(validateAge(18)).toBe(true)",
+            )],
         )];
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty());

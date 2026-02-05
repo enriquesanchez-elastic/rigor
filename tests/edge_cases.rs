@@ -58,7 +58,8 @@ fn syntax_error_handled_gracefully() {
 #[test]
 fn no_describe_block_extracts_test() {
     let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
-    file.write_all(b"it('test', () => { expect(1).toBe(1); });").unwrap();
+    file.write_all(b"it('test', () => { expect(1).toBe(1); });")
+        .unwrap();
     file.flush().unwrap();
     let result = analyze_path(file.path());
     assert!(result.is_ok());
@@ -88,8 +89,10 @@ fn deeply_nested_describes() {
 #[test]
 fn utf8_identifiers_no_crash() {
     let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
-    file.write_all("describe('テスト', () => { it('works', () => { expect(1).toBe(1); }); });".as_bytes())
-        .unwrap();
+    file.write_all(
+        "describe('テスト', () => { it('works', () => { expect(1).toBe(1); }); });".as_bytes(),
+    )
+    .unwrap();
     file.flush().unwrap();
     let result = analyze_path(file.path());
     assert!(result.is_ok());

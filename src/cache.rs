@@ -282,7 +282,12 @@ mod tests {
         let mut cache = AnalysisCache::new(dir.path());
         let result = make_result("auth.test.ts");
 
-        cache.set(Path::new("auth.test.ts"), "const x = 1;", None, result.clone());
+        cache.set(
+            Path::new("auth.test.ts"),
+            "const x = 1;",
+            None,
+            result.clone(),
+        );
         assert!(cache.dirty, "cache should be dirty after set");
 
         let cached = cache.get(Path::new("auth.test.ts"), "const x = 1;", None);
@@ -335,10 +340,7 @@ mod tests {
 
         // Miss when source presence changes (cached with source, queried without)
         let cached = cache.get(Path::new("auth.test.ts"), "test content", None);
-        assert!(
-            cached.is_none(),
-            "should miss when source presence changes"
-        );
+        assert!(cached.is_none(), "should miss when source presence changes");
     }
 
     #[test]
@@ -372,25 +374,17 @@ mod tests {
         assert_eq!(cache.stats().entries, 1);
         cache.clear();
         assert_eq!(cache.stats().entries, 0);
-        assert!(cache.get(Path::new("auth.test.ts"), "content", None).is_none());
+        assert!(cache
+            .get(Path::new("auth.test.ts"), "content", None)
+            .is_none());
     }
 
     #[test]
     fn test_cache_cleanup() {
         let dir = tempfile::TempDir::new().unwrap();
         let mut cache = AnalysisCache::new(dir.path());
-        cache.set(
-            Path::new("a.test.ts"),
-            "a",
-            None,
-            make_result("a.test.ts"),
-        );
-        cache.set(
-            Path::new("b.test.ts"),
-            "b",
-            None,
-            make_result("b.test.ts"),
-        );
+        cache.set(Path::new("a.test.ts"), "a", None, make_result("a.test.ts"));
+        cache.set(Path::new("b.test.ts"), "b", None, make_result("b.test.ts"));
         assert_eq!(cache.stats().entries, 2);
 
         // Only a.test.ts still exists

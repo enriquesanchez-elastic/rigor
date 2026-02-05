@@ -262,7 +262,10 @@ mod tests {
             .unwrap();
         let tests = vec![make_test(
             "getResponse",
-            vec![make_assertion(AssertionKind::ToBe, "expect(result.status).toBe(200)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(result.status).toBe(200)",
+            )],
         )];
         let test_source = "const result = getResponse(); expect(result.status).toBe(200);";
         let issues = rule.analyze(&tests, test_source, &tree);
@@ -278,20 +281,23 @@ mod tests {
         "#;
         let mut parser = crate::parser::TypeScriptParser::new().unwrap();
         let source_tree = parser.parse(source_content).unwrap();
-        let rule = BehavioralCompletenessRule::new().with_source(
-            source_content.to_string(),
-            source_tree,
-        );
+        let rule =
+            BehavioralCompletenessRule::new().with_source(source_content.to_string(), source_tree);
         let tests = vec![make_test(
             "getResponse",
-            vec![make_assertion(AssertionKind::ToBe, "expect(result.status).toBe(200)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(result.status).toBe(200)",
+            )],
         )];
         let test_source = "const result = getResponse(); expect(result.status).toBe(200);";
         let tree = parser.parse(test_source).unwrap();
         let issues = rule.analyze(&tests, test_source, &tree);
         if !issues.is_empty() {
             assert!(
-                issues.iter().any(|i| i.rule == Rule::BehavioralCompleteness),
+                issues
+                    .iter()
+                    .any(|i| i.rule == Rule::BehavioralCompleteness),
                 "when issues found, expected BehavioralCompleteness"
             );
         }

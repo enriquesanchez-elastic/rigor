@@ -386,7 +386,10 @@ mod tests {
             "expected score 50–88 for trivial+vague file, got {}",
             result.score.value
         );
-        assert!(result.score.value < 90, "trivial assertion should not get A");
+        assert!(
+            result.score.value < 90,
+            "trivial assertion should not get A"
+        );
     }
 
     #[test]
@@ -420,7 +423,10 @@ mod tests {
             result.score.value,
             result.score.grade
         );
-        assert!(result.score.value >= 20, "penalty should not push below 20 for this file");
+        assert!(
+            result.score.value >= 20,
+            "penalty should not push below 20 for this file"
+        );
     }
 
     #[test]
@@ -483,7 +489,11 @@ mod tests {
         let paths: Vec<PathBuf> = vec![file1.path().to_path_buf(), file2.path().to_path_buf()];
         let results = engine.analyze_parallel(&paths, None);
 
-        assert_eq!(results.len(), 2, "analyze_parallel should return two results");
+        assert_eq!(
+            results.len(),
+            2,
+            "analyze_parallel should return two results"
+        );
         let ok_count = results.iter().filter(|r| r.is_ok()).count();
         assert_eq!(ok_count, 2, "both results should succeed");
     }
@@ -521,7 +531,10 @@ mod tests {
 
         let stats = AnalysisEngine::aggregate_stats(&[r1.clone(), r2.clone()]);
         assert_eq!(stats.files_analyzed, 2);
-        assert_eq!(stats.total_tests, r1.stats.total_tests + r2.stats.total_tests);
+        assert_eq!(
+            stats.total_tests,
+            r1.stats.total_tests + r2.stats.total_tests
+        );
         assert_eq!(stats.total_issues, r1.issues.len() + r2.issues.len());
         let expected_avg = ((r1.score.value as u32 + r2.score.value as u32) / 2) as u8;
         assert_eq!(stats.average_score.value, expected_avg);
@@ -546,7 +559,10 @@ mod tests {
             .issues
             .iter()
             .any(|i| i.rule == crate::Rule::TrivialAssertion);
-        assert!(has_trivial, "should detect trivial assertion without config");
+        assert!(
+            has_trivial,
+            "should detect trivial assertion without config"
+        );
 
         // Now analyze with config that turns off trivial-assertion
         let mut rules = HashMap::new();
@@ -627,8 +643,8 @@ mod tests {
             ..Config::default()
         };
 
-        let engine = AnalysisEngine::new()
-            .with_project_root(PathBuf::from("test-repos/fake-project"));
+        let engine =
+            AnalysisEngine::new().with_project_root(PathBuf::from("test-repos/fake-project"));
         let result = engine.analyze(file.path(), Some(&config)).unwrap();
 
         assert!(
@@ -661,8 +677,8 @@ mod tests {
         )
         .unwrap();
 
-        let engine = AnalysisEngine::new()
-            .with_project_root(PathBuf::from("test-repos/fake-project"));
+        let engine =
+            AnalysisEngine::new().with_project_root(PathBuf::from("test-repos/fake-project"));
         let result = engine.analyze(file.path(), Some(&config)).unwrap();
 
         assert!(

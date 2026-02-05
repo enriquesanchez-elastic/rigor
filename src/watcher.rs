@@ -164,12 +164,10 @@ mod tests {
     fn test_is_create_or_modify() {
         use notify::event::{CreateKind, ModifyKind, RemoveKind};
         assert!(is_create_or_modify(&EventKind::Create(CreateKind::File)));
-        assert!(is_create_or_modify(&EventKind::Modify(
-            ModifyKind::Data(notify::event::DataChange::Content)
-        )));
-        assert!(!is_create_or_modify(&EventKind::Remove(
-            RemoveKind::File
-        )));
+        assert!(is_create_or_modify(&EventKind::Modify(ModifyKind::Data(
+            notify::event::DataChange::Content
+        ))));
+        assert!(!is_create_or_modify(&EventKind::Remove(RemoveKind::File)));
     }
 
     #[test]

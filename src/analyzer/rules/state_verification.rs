@@ -118,7 +118,10 @@ mod tests {
             .unwrap();
         let tests = vec![make_test(
             "should update user",
-            vec![make_assertion(AssertionKind::ToBe, "expect(result).toBe(true)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(result).toBe(true)",
+            )],
         )];
         let issues = rule.analyze(&tests, "", &tree);
         assert!(!issues.is_empty());
@@ -134,7 +137,10 @@ mod tests {
             .unwrap();
         let tests = vec![make_test(
             "returns sum",
-            vec![make_assertion(AssertionKind::ToBe, "expect(add(1,2)).toBe(3)")],
+            vec![make_assertion(
+                AssertionKind::ToBe,
+                "expect(add(1,2)).toBe(3)",
+            )],
         )];
         let issues = rule.analyze(&tests, "", &tree);
         assert!(issues.is_empty());

@@ -235,10 +235,7 @@ mod tests {
 
     #[test]
     fn test_sampler_select_all_when_fewer_than_count() {
-        let mutations = vec![
-            make_mutation(">= to >"),
-            make_mutation("true to false"),
-        ];
+        let mutations = vec![make_mutation(">= to >"), make_mutation("true to false")];
         let selected = sampler::select_mutations(&mutations, 10);
         assert_eq!(selected.len(), 2);
     }
@@ -267,9 +264,9 @@ mod tests {
         let mutations = vec![
             make_mutation("+ to -"),        // priority 1
             make_mutation(">= to >"),       // priority 3 (boundary)
-            make_mutation("true to false"),  // priority 2
-            make_mutation("<= to <"),        // priority 3 (boundary)
-            make_mutation("* to /"),         // priority 1
+            make_mutation("true to false"), // priority 2
+            make_mutation("<= to <"),       // priority 3 (boundary)
+            make_mutation("* to /"),        // priority 1
         ];
         let selected = sampler::select_mutations(&mutations, 2);
         // Should prefer the two boundary operators

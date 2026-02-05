@@ -7,8 +7,8 @@ use std::path::Path;
 const FAKE_PROJECT_ROOT: &str = "test-repos/fake-project";
 
 fn analyze(test_path: &str) -> rigor::AnalysisResult {
-    let engine = AnalysisEngine::new()
-        .with_project_root(std::path::PathBuf::from(FAKE_PROJECT_ROOT));
+    let engine =
+        AnalysisEngine::new().with_project_root(std::path::PathBuf::from(FAKE_PROJECT_ROOT));
     engine
         .analyze(Path::new(test_path), None)
         .unwrap_or_else(|e| panic!("analyze({}) failed: {}", test_path, e))
@@ -133,8 +133,7 @@ fn missing_boundary_test_detected() {
     let r = analyze("test-repos/fake-project/tests/missing-boundary-tests.test.ts");
     // Strategy notes this file may score 95/A and rule can be weak without source mapping
     assert!(
-        r.issues.iter().any(|i| i.rule == Rule::MissingBoundaryTest)
-            || r.stats.total_tests > 0,
+        r.issues.iter().any(|i| i.rule == Rule::MissingBoundaryTest) || r.stats.total_tests > 0,
         "expected MissingBoundaryTest or at least parsed tests"
     );
 }
@@ -154,7 +153,10 @@ fn mutation_resistant_detected() {
 #[test]
 fn assertion_intent_mismatch_detected() {
     let r = analyze("test-repos/fake-project/tests/assertion-intent-mismatch.test.ts");
-    assert!(r.issues.iter().any(|i| i.rule == Rule::AssertionIntentMismatch));
+    assert!(r
+        .issues
+        .iter()
+        .any(|i| i.rule == Rule::AssertionIntentMismatch));
 }
 
 // --- Framework detection ---

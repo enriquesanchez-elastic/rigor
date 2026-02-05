@@ -240,10 +240,8 @@ mod tests {
         "#;
         let mut parser = crate::parser::TypeScriptParser::new().unwrap();
         let source_tree = parser.parse(source_content).unwrap();
-        let rule = ReturnPathCoverageRule::new().with_source(
-            source_content.to_string(),
-            source_tree,
-        );
+        let rule =
+            ReturnPathCoverageRule::new().with_source(source_content.to_string(), source_tree);
         let tests = vec![TestCase {
             name: "positive case".to_string(),
             location: Location::new(2, 1),

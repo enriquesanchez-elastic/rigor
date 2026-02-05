@@ -341,10 +341,7 @@ mod tests {
             config.rule_severity("weak-assertion"),
             Some(RuleSeverity::Error)
         );
-        assert_eq!(
-            config.rule_severity("debug-code"),
-            Some(RuleSeverity::Off)
-        );
+        assert_eq!(config.rule_severity("debug-code"), Some(RuleSeverity::Off));
         assert_eq!(config.rule_severity("nonexistent-rule"), None);
     }
 
@@ -478,10 +475,7 @@ mod tests {
             child.rules.get("weak-assertion"),
             Some(&RuleSeverity::Error)
         );
-        assert_eq!(
-            child.rules.get("debug-code"),
-            Some(&RuleSeverity::Warning)
-        );
+        assert_eq!(child.rules.get("debug-code"), Some(&RuleSeverity::Warning));
         // Base ignore inherited
         assert!(child.ignore.contains(&"**/legacy/**".to_string()));
         // Base framework inherited when child is Auto
@@ -517,10 +511,7 @@ mod tests {
         assert_eq!(config.rules.len(), 3);
         assert_eq!(config.ignore.len(), 2);
         assert_eq!(config.source_mapping.mode, SourceMappingMode::Manual);
-        assert_eq!(
-            config.source_mapping.source_root,
-            Some("src".to_string())
-        );
+        assert_eq!(config.source_mapping.source_root, Some("src".to_string()));
         assert_eq!(config.source_mapping.mappings.len(), 1);
         assert_eq!(config.test_patterns.len(), 2);
         assert_eq!(config.test_root, Some("tests".to_string()));

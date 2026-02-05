@@ -227,7 +227,9 @@ mod tests {
             }],
         )];
 
-        assert!(!BoundaryConditionsRule::tests_cover_boundary(&tests, "18", ">="));
+        assert!(!BoundaryConditionsRule::tests_cover_boundary(
+            &tests, "18", ">="
+        ));
     }
 
     #[test]

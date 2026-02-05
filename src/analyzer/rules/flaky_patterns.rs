@@ -200,7 +200,10 @@ mod tests {
         });
         "#;
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
-        assert!(!issues.is_empty(), "should detect Date.now() without useFakeTimers");
+        assert!(
+            !issues.is_empty(),
+            "should detect Date.now() without useFakeTimers"
+        );
         assert!(issues.iter().any(|i| i.rule == Rule::FlakyPattern));
     }
 
@@ -232,7 +235,10 @@ mod tests {
         });
         "#;
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
-        assert!(issues.is_empty(), "useFakeTimers should suppress Date.now() issue");
+        assert!(
+            issues.is_empty(),
+            "useFakeTimers should suppress Date.now() issue"
+        );
     }
 
     #[test]

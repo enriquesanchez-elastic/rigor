@@ -220,10 +220,8 @@ mod tests {
         "#;
         let mut parser = crate::parser::TypeScriptParser::new().unwrap();
         let source_tree = parser.parse(source_content).unwrap();
-        let rule = SideEffectVerificationRule::new().with_source(
-            source_content.to_string(),
-            source_tree,
-        );
+        let rule =
+            SideEffectVerificationRule::new().with_source(source_content.to_string(), source_tree);
         let tests = vec![TestCase {
             name: "appendItem".to_string(),
             location: crate::Location::new(2, 1),

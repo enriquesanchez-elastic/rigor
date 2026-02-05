@@ -60,10 +60,9 @@ fn sarif_output_valid() {
 fn file_not_found_exit_2() {
     let mut cmd = rigor_cmd();
     cmd.arg("nonexistent.test.ts");
-    cmd.assert()
-        .failure()
-        .code(2)
-        .stderr(predicate::str::contains("Failed to read").or(predicate::str::contains("nonexistent")));
+    cmd.assert().failure().code(2).stderr(
+        predicate::str::contains("Failed to read").or(predicate::str::contains("nonexistent")),
+    );
 }
 
 #[test]
@@ -111,10 +110,17 @@ fn json_output_contains_issues_array() {
     let mut cmd = rigor_cmd();
     cmd.arg(WEAK_TEST).arg("--json").arg("--threshold").arg("0");
     let output = cmd.output().unwrap();
-    assert!(output.status.success(), "should succeed with threshold 0; stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "should succeed with threshold 0; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let s = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(s.trim()).expect("valid JSON");
-    assert!(parsed.get("issues").is_some(), "JSON should have issues key");
+    assert!(
+        parsed.get("issues").is_some(),
+        "JSON should have issues key"
+    );
     let issues = parsed["issues"].as_array().unwrap();
     assert!(!issues.is_empty(), "weak test file should have issues");
 }

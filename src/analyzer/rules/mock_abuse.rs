@@ -176,7 +176,10 @@ mod tests {
             .unwrap()
             .parse("test")
             .unwrap();
-        let source = (0..6).map(|_| "jest.mock('foo');").collect::<Vec<_>>().join("\n");
+        let source = (0..6)
+            .map(|_| "jest.mock('foo');")
+            .collect::<Vec<_>>()
+            .join("\n");
         let issues = rule.analyze(&make_empty_tests(), &source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));

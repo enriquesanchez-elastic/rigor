@@ -91,7 +91,9 @@ struct JsonSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Issue, Location, Rule, Score, ScoreBreakdown, Severity, TestFramework, TestStats, TestType};
+    use crate::{
+        Issue, Location, Rule, Score, ScoreBreakdown, Severity, TestFramework, TestStats, TestType,
+    };
     use std::path::PathBuf;
 
     fn make_result(path: &str, score: u8) -> AnalysisResult {

@@ -626,10 +626,7 @@ mod tests {
 
         let mapper = SourceMapper::new();
         let result = mapper.find_source_file(&test_path);
-        assert!(
-            result.is_some(),
-            "should find adjacent source file"
-        );
+        assert!(result.is_some(), "should find adjacent source file");
         assert_eq!(
             result.unwrap().file_name().unwrap().to_str().unwrap(),
             "auth.ts"
@@ -688,10 +685,7 @@ mod tests {
         };
         let mapper = SourceMapper::with_config(config);
         let result = mapper.find_source_file(&test_path);
-        assert!(
-            result.is_none(),
-            "should return None when mode is Off"
-        );
+        assert!(result.is_none(), "should return None when mode is Off");
     }
 
     #[test]
@@ -708,7 +702,10 @@ mod tests {
 
         let mapper = SourceMapper::new();
         let result = mapper.find_source_file(&test_file);
-        assert!(result.is_some(), "should find source from __tests__ pattern");
+        assert!(
+            result.is_some(),
+            "should find source from __tests__ pattern"
+        );
         assert_eq!(
             result.unwrap().file_name().unwrap().to_str().unwrap(),
             "Button.tsx"
@@ -748,14 +745,10 @@ mod tests {
             source_root: Some("lib".to_string()),
             ..SourceMappingConfig::default()
         };
-        let mapper = SourceMapper::with_config(config)
-            .with_project_root(PathBuf::from("/project"));
+        let mapper = SourceMapper::with_config(config).with_project_root(PathBuf::from("/project"));
         // Just verify construction doesn't panic
         assert!(mapper.project_root.is_some());
-        assert_eq!(
-            mapper.config.source_root,
-            Some("lib".to_string())
-        );
+        assert_eq!(mapper.config.source_root, Some("lib".to_string()));
     }
 
     #[test]
