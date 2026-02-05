@@ -13,11 +13,6 @@ on:
         description: 'Version to release (e.g., 0.1.0)'
         required: true
         type: string
-      prerelease:
-        description: 'Mark as prerelease'
-        required: false
-        type: boolean
-        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -52,6 +47,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
 
+  # When triggered manually, just create a tag (which triggers the build via tag push)
   create-tag:
     name: Create Release Tag
     needs: test
@@ -59,8 +55,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      tag: v${{ github.event.inputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,17 +68,11 @@ jobs:
           git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
           git push origin "v${{ github.event.inputs.version }}"
 
+  # Build only runs on tag pushes (not workflow_dispatch - that just creates the tag)
   build:
     name: Build ${{ matrix.target }}
-    needs: [test, create-tag]
-    # Run if: tests passed AND (triggered by tag push OR workflow_dispatch with successful tag creation)
-    if: |
-      always() &&
-      needs.test.result == 'success' &&
-      (
-        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-        (github.event_name == 'workflow_dispatch' && needs.create-tag.result == 'success')
-      )
+    needs: test
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -171,8 +159,8 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build, create-tag]
-    if: always() && needs.build.result == 'success'
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -182,16 +170,11 @@ jobs:
       - name: Determine release tag
         id: tag
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "prerelease=${{ github.event.inputs.prerelease }}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          if [[ "${GITHUB_REF}" == *"-alpha"* ]] || [[ "${GITHUB_REF}" == *"-beta"* ]] || [[ "${GITHUB_REF}" == *"-rc"* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-            if [[ "${GITHUB_REF}" == *"-alpha"* ]] || [[ "${GITHUB_REF}" == *"-beta"* ]] || [[ "${GITHUB_REF}" == *"-rc"* ]]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
-            else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
-            fi
+            echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Download all artifacts
