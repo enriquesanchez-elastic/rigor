@@ -98,8 +98,8 @@ impl TrivialAssertionRule {
             .collect::<String>()
             .to_lowercase();
         let check = |c: regex::Captures| {
-            let left = c.get(1).and_then(|m| Some(m.as_str()));
-            let right = c.get(3).and_then(|m| Some(m.as_str()));
+            let left = c.get(1).map(|m| m.as_str());
+            let right = c.get(3).map(|m| m.as_str());
             match (left, right) {
                 (Some(a), Some(b)) if a == b => Some(()),
                 _ => None,
