@@ -132,6 +132,7 @@ impl ScoreCalculator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Location;
 
     #[test]
     fn test_score_calculation() {
@@ -147,6 +148,57 @@ mod tests {
         // total() normalizes sum (max 125) to 0-100: (95 * 100) / 125 = 76
         assert_eq!(score.value, 76);
         assert_eq!(score.grade, Grade::C);
+    }
+
+    #[test]
+    fn test_score_calculation_perfect() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 25,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+        };
+        let score = ScoreCalculator::calculate(&breakdown);
+        assert_eq!(score.value, 100);
+        assert_eq!(score.grade, Grade::A);
+    }
+
+    #[test]
+    fn test_score_calculation_zero() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 0,
+            error_coverage: 0,
+            boundary_conditions: 0,
+            test_isolation: 0,
+            input_variety: 0,
+        };
+        let score = ScoreCalculator::calculate(&breakdown);
+        assert_eq!(score.value, 0);
+        assert_eq!(score.grade, Grade::F);
+    }
+
+    #[test]
+    fn test_breakdown_total_normalization() {
+        // Sum = 50, normalized = (50 * 100) / 125 = 40
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 10,
+            error_coverage: 10,
+            boundary_conditions: 10,
+            test_isolation: 10,
+            input_variety: 10,
+        };
+        assert_eq!(breakdown.total(), 40);
+
+        // Sum = 125, normalized = (125 * 100) / 125 = 100
+        let perfect = ScoreBreakdown {
+            assertion_quality: 25,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+        };
+        assert_eq!(perfect.total(), 100);
     }
 
     #[test]
@@ -166,5 +218,129 @@ mod tests {
         assert_eq!(Grade::from_score(75), Grade::C);
         assert_eq!(Grade::from_score(65), Grade::D);
         assert_eq!(Grade::from_score(55), Grade::F);
+    }
+
+    #[test]
+    fn test_apply_issue_penalty_no_issues() {
+        let score = Score::new(90);
+        let result = ScoreCalculator::apply_issue_penalty(score, &[]);
+        assert_eq!(result.value, 90);
+        assert_eq!(result.grade, Grade::A);
+    }
+
+    #[test]
+    fn test_apply_issue_penalty_errors_reduce_score() {
+        let score = Score::new(90);
+        let issues = vec![
+            Issue {
+                rule: crate::Rule::WeakAssertion,
+                severity: Severity::Error,
+                message: "error1".to_string(),
+                location: Location::new(1, 1),
+                suggestion: None,
+            },
+            Issue {
+                rule: crate::Rule::WeakAssertion,
+                severity: Severity::Error,
+                message: "error2".to_string(),
+                location: Location::new(2, 1),
+                suggestion: None,
+            },
+        ];
+        let result = ScoreCalculator::apply_issue_penalty(score, &issues);
+        // 2 errors * 5 = 10 penalty, 90 - 10 = 80
+        assert_eq!(result.value, 80);
+        assert_eq!(result.grade, Grade::B);
+    }
+
+    #[test]
+    fn test_apply_issue_penalty_clamped_to_zero() {
+        let score = Score::new(10);
+        // 7 errors * 5 = 35 (capped), penalty 35 > score 10 → clamps to 0
+        let issues: Vec<Issue> = (0..7)
+            .map(|i| Issue {
+                rule: crate::Rule::NoAssertions,
+                severity: Severity::Error,
+                message: format!("err{}", i),
+                location: Location::new(i + 1, 1),
+                suggestion: None,
+            })
+            .collect();
+        let result = ScoreCalculator::apply_issue_penalty(score, &issues);
+        assert_eq!(result.value, 0);
+        assert_eq!(result.grade, Grade::F);
+    }
+
+    #[test]
+    fn test_apply_issue_penalty_mixed_severities() {
+        let score = Score::new(95);
+        let issues = vec![
+            Issue {
+                rule: crate::Rule::WeakAssertion,
+                severity: Severity::Error,
+                message: "e".to_string(),
+                location: Location::new(1, 1),
+                suggestion: None,
+            },
+            Issue {
+                rule: crate::Rule::VagueTestName,
+                severity: Severity::Warning,
+                message: "w".to_string(),
+                location: Location::new(2, 1),
+                suggestion: None,
+            },
+            Issue {
+                rule: crate::Rule::HardcodedValues,
+                severity: Severity::Info,
+                message: "i".to_string(),
+                location: Location::new(3, 1),
+                suggestion: None,
+            },
+        ];
+        let result = ScoreCalculator::apply_issue_penalty(score, &issues);
+        // 1*5 + 1*2 + 1*1 = 8 penalty, 95 - 8 = 87
+        assert_eq!(result.value, 87);
+        assert_eq!(result.grade, Grade::B);
+    }
+
+    #[test]
+    fn test_recommendations_low_scores() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 10,
+            error_coverage: 10,
+            boundary_conditions: 10,
+            test_isolation: 10,
+            input_variety: 10,
+        };
+        let recs = ScoreCalculator::recommendations(&breakdown);
+        assert_eq!(recs.len(), 5);
+        assert!(recs[0].contains("assertion"));
+        assert!(recs[1].contains("error"));
+        assert!(recs[2].contains("edge cases"));
+        assert!(recs[3].contains("isolated"));
+        assert!(recs[4].contains("Vary"));
+    }
+
+    #[test]
+    fn test_recommendations_high_scores() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 20,
+            error_coverage: 20,
+            boundary_conditions: 20,
+            test_isolation: 20,
+            input_variety: 20,
+        };
+        let recs = ScoreCalculator::recommendations(&breakdown);
+        assert_eq!(recs.len(), 1);
+        assert!(recs[0].contains("good shape"));
+    }
+
+    #[test]
+    fn test_grade_description_all_grades() {
+        assert!(ScoreCalculator::grade_description(Grade::A).contains("Excellent"));
+        assert!(ScoreCalculator::grade_description(Grade::B).contains("Good"));
+        assert!(ScoreCalculator::grade_description(Grade::C).contains("Fair"));
+        assert!(ScoreCalculator::grade_description(Grade::D).contains("Poor"));
+        assert!(ScoreCalculator::grade_description(Grade::F).contains("Failing"));
     }
 }

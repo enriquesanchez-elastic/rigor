@@ -3,6 +3,8 @@
 use super::AnalysisRule;
 use crate::parser::SourceFileParser;
 use crate::{Issue, Location, Rule, Severity, TestCase};
+use regex::Regex;
+use std::collections::HashMap;
 use tree_sitter::Tree;
 
 /// Rule for analyzing boundary condition coverage
@@ -54,6 +56,113 @@ impl BoundaryConditionsRule {
 
         false
     }
+
+    /// Heuristic: detect functions tested with only a single non-edge numeric value.
+    /// For example, `validateAge(25)` but never 0, 17, 18, 19 suggests missing boundary tests.
+    /// This works without source file access — purely from test content.
+    fn detect_single_value_functions(tests: &[TestCase]) -> Vec<Issue> {
+        // Extract fn_name(number) patterns from assertion raw text
+        let call_re = Regex::new(r"(\w+)\((-?\d+(?:\.\d+)?)\)").unwrap();
+        // Also match multi-arg calls to catch the first arg: fn(5, 0, 10)
+        let multi_arg_re = Regex::new(r"(\w+)\((-?\d+(?:\.\d+)?)\s*,").unwrap();
+
+        // Collect numeric args per function name
+        let mut fn_values: HashMap<String, Vec<f64>> = HashMap::new();
+        let mut fn_location: HashMap<String, Location> = HashMap::new();
+
+        // Skip assertion matchers themselves (expect, toBe, etc.)
+        let skip_names = [
+            "expect",
+            "toBe",
+            "toEqual",
+            "toStrictEqual",
+            "toBeDefined",
+            "toBeUndefined",
+            "toBeNull",
+            "toBeTruthy",
+            "toBeFalsy",
+            "toThrow",
+            "toContain",
+            "toMatch",
+            "toHaveLength",
+            "toBeGreaterThan",
+            "toBeGreaterThanOrEqual",
+            "toBeLessThan",
+            "toBeLessThanOrEqual",
+            "toHaveProperty",
+            "toHaveBeenCalledTimes",
+            "toHaveBeenCalledWith",
+            "toMatchSnapshot",
+            "toBeInstanceOf",
+            "toBeCloseTo",
+            "toHaveBeenNthCalledWith",
+            "toHaveTextContent",
+            "toBeInTheDocument",
+            "toHaveAttribute",
+        ];
+
+        for test in tests {
+            for assertion in &test.assertions {
+                for re in [&call_re, &multi_arg_re] {
+                    for cap in re.captures_iter(&assertion.raw) {
+                        let fn_name = cap[1].to_string();
+                        if skip_names.contains(&fn_name.as_str()) {
+                            continue;
+                        }
+                        if let Ok(val) = cap[2].parse::<f64>() {
+                            fn_values.entry(fn_name.clone()).or_default().push(val);
+                            fn_location
+                                .entry(fn_name)
+                                .or_insert_with(|| assertion.location.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut issues = Vec::new();
+        let edge_values: &[f64] = &[-1.0, 0.0, 1.0];
+
+        for (fn_name, values) in &fn_values {
+            // De-duplicate
+            let mut unique: Vec<f64> = values.clone();
+            unique.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            unique.dedup();
+
+            // If only 1 unique value and it's not an edge value, flag it
+            if unique.len() == 1 && !edge_values.contains(&unique[0]) {
+                let val = unique[0] as i64;
+                let location = fn_location
+                    .get(fn_name)
+                    .cloned()
+                    .unwrap_or_else(|| Location::new(1, 1));
+
+                issues.push(Issue {
+                    rule: Rule::MissingBoundaryTest,
+                    severity: Severity::Warning,
+                    message: format!(
+                        "'{}' is only tested with value {} — consider testing boundary values \
+                         (e.g., {}, {}, {})",
+                        fn_name,
+                        val,
+                        val - 1,
+                        val,
+                        val + 1
+                    ),
+                    location,
+                    suggestion: Some(format!(
+                        "Add boundary tests: expect({}({})).toBe(expected); expect({}({})).toBe(expected)",
+                        fn_name,
+                        val - 1,
+                        fn_name,
+                        val + 1
+                    )),
+                });
+            }
+        }
+
+        issues
+    }
 }
 
 impl Default for BoundaryConditionsRule {
@@ -70,7 +179,7 @@ impl AnalysisRule for BoundaryConditionsRule {
     fn analyze(&self, tests: &[TestCase], _source: &str, _tree: &Tree) -> Vec<Issue> {
         let mut issues = Vec::new();
 
-        // If we have source file, analyze boundary conditions
+        // If we have source file, analyze boundary conditions from source
         if let (Some(source_content), Some(source_tree)) = (&self.source_content, &self.source_tree)
         {
             let parser = SourceFileParser::new(source_content);
@@ -104,6 +213,11 @@ impl AnalysisRule for BoundaryConditionsRule {
                 }
             }
         }
+
+        // Heuristic: detect functions tested with only a single numeric value
+        // (works without source file — purely from test content)
+        let single_value_issues = Self::detect_single_value_functions(tests);
+        issues.extend(single_value_issues);
 
         // Also check test file for hardcoded edge values
         let edge_values = ["0", "-1", "1", "null", "undefined", "''", "[]", "{}"];
@@ -198,16 +312,20 @@ mod tests {
         }
     }
 
+    fn make_assertion(raw: &str) -> Assertion {
+        Assertion {
+            kind: AssertionKind::ToBe,
+            quality: AssertionKind::ToBe.quality(),
+            location: Location::new(1, 1),
+            raw: raw.to_string(),
+        }
+    }
+
     #[test]
     fn test_boundary_detection() {
         let tests = vec![make_test(
             "handles age 18",
-            vec![Assertion {
-                kind: AssertionKind::ToBe,
-                quality: AssertionKind::ToBe.quality(),
-                location: Location::new(1, 1),
-                raw: "expect(isAdult(18)).toBe(true)".to_string(),
-            }],
+            vec![make_assertion("expect(isAdult(18)).toBe(true)")],
         )];
 
         assert!(BoundaryConditionsRule::tests_cover_boundary(
@@ -219,12 +337,7 @@ mod tests {
     fn test_boundary_not_detected_when_not_mentioned() {
         let tests = vec![make_test(
             "basic test",
-            vec![Assertion {
-                kind: AssertionKind::ToBe,
-                quality: AssertionKind::ToBe.quality(),
-                location: Location::new(1, 1),
-                raw: "expect(x).toBe(42)".to_string(),
-            }],
+            vec![make_assertion("expect(x).toBe(42)")],
         )];
 
         assert!(!BoundaryConditionsRule::tests_cover_boundary(
@@ -236,12 +349,7 @@ mod tests {
     fn test_missing_edge_case_detection() {
         let tests = vec![make_test(
             "basic test",
-            vec![Assertion {
-                kind: AssertionKind::ToBe,
-                quality: AssertionKind::ToBe.quality(),
-                location: Location::new(1, 1),
-                raw: "expect(x).toBe(42)".to_string(),
-            }],
+            vec![make_assertion("expect(x).toBe(42)")],
         )];
 
         let rule = BoundaryConditionsRule::new();
@@ -252,5 +360,132 @@ mod tests {
         let issues = rule.analyze(&tests, "", &tree);
 
         assert!(issues.iter().any(|i| i.message.contains("edge cases")));
+    }
+
+    // --- detect_single_value_functions heuristic ---
+
+    #[test]
+    fn single_value_function_flagged() {
+        // validateAge(25) only — no boundary values tested
+        let tests = vec![make_test(
+            "validateAge only tests one value",
+            vec![make_assertion("expect(validateAge(25)).toBe(true)")],
+        )];
+
+        let issues = BoundaryConditionsRule::detect_single_value_functions(&tests);
+        assert!(
+            !issues.is_empty(),
+            "should flag validateAge(25) as single-value"
+        );
+        assert!(issues[0].message.contains("validateAge"));
+        assert!(issues[0].message.contains("25"));
+        assert!(issues[0].rule == Rule::MissingBoundaryTest);
+    }
+
+    #[test]
+    fn multiple_values_not_flagged() {
+        // validateAge tested with 17, 18, 19 — boundary coverage is good
+        let tests = vec![
+            make_test(
+                "rejects age 17",
+                vec![make_assertion("expect(validateAge(17)).toBe(false)")],
+            ),
+            make_test(
+                "accepts age 18",
+                vec![make_assertion("expect(validateAge(18)).toBe(true)")],
+            ),
+            make_test(
+                "accepts age 19",
+                vec![make_assertion("expect(validateAge(19)).toBe(true)")],
+            ),
+        ];
+
+        let issues = BoundaryConditionsRule::detect_single_value_functions(&tests);
+        assert!(
+            !issues.iter().any(|i| i.message.contains("validateAge")),
+            "should NOT flag validateAge when tested with multiple values"
+        );
+    }
+
+    #[test]
+    fn edge_value_zero_not_flagged() {
+        // Testing with 0 is itself an edge value — no flag
+        let tests = vec![make_test(
+            "handles zero",
+            vec![make_assertion("expect(calculate(0)).toBe(0)")],
+        )];
+
+        let issues = BoundaryConditionsRule::detect_single_value_functions(&tests);
+        assert!(
+            !issues.iter().any(|i| i.message.contains("calculate")),
+            "should NOT flag when the single value is an edge value (0)"
+        );
+    }
+
+    #[test]
+    fn assertion_matchers_not_flagged_as_functions() {
+        // toBe(42) should not be flagged — toBe is an assertion matcher, not a function under test
+        let tests = vec![make_test(
+            "basic assertion",
+            vec![make_assertion("expect(result).toBe(42)")],
+        )];
+
+        let issues = BoundaryConditionsRule::detect_single_value_functions(&tests);
+        assert!(
+            !issues.iter().any(|i| i.message.contains("toBe")),
+            "should NOT flag assertion matchers like toBe"
+        );
+        assert!(
+            !issues.iter().any(|i| i.message.contains("expect")),
+            "should NOT flag expect"
+        );
+    }
+
+    #[test]
+    fn multi_arg_function_first_arg_flagged() {
+        // clamp(5, 0, 10) — 5 is the only value for clamp's first arg
+        let tests = vec![make_test(
+            "clamp middle",
+            vec![make_assertion("expect(clamp(5, 0, 10)).toBe(5)")],
+        )];
+
+        let issues = BoundaryConditionsRule::detect_single_value_functions(&tests);
+        assert!(
+            issues.iter().any(|i| i.message.contains("clamp")),
+            "should flag clamp(5, ...) as single-value"
+        );
+    }
+
+    #[test]
+    fn integration_boundary_heuristic_fires_without_source() {
+        // Full analyze path without source file — the heuristic should still detect issues
+        let tests = vec![
+            make_test(
+                "validateAge only tests one value",
+                vec![make_assertion("expect(validateAge(25)).toBe(true)")],
+            ),
+            make_test(
+                "clamp only tests middle",
+                vec![make_assertion("expect(clamp(5, 0, 10)).toBe(5)")],
+            ),
+        ];
+
+        let rule = BoundaryConditionsRule::new(); // no source
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+
+        let boundary_warnings: Vec<_> = issues
+            .iter()
+            .filter(|i| i.rule == Rule::MissingBoundaryTest && i.severity == Severity::Warning)
+            .collect();
+
+        assert!(
+            !boundary_warnings.is_empty(),
+            "should detect missing boundary tests from test content alone, got issues: {:?}",
+            issues.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
     }
 }

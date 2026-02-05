@@ -71,8 +71,8 @@ regression!(
 regression!(
     missing_boundary_tests,
     "test-repos/fake-project/tests/missing-boundary-tests.test.ts",
-    95,
-    2
+    87,
+    4
 );
 regression!(
     missing_error_tests,

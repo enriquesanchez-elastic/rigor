@@ -131,10 +131,13 @@ fn missing_error_test_detected() {
 #[test]
 fn missing_boundary_test_detected() {
     let r = analyze("test-repos/fake-project/tests/missing-boundary-tests.test.ts");
-    // Strategy notes this file may score 95/A and rule can be weak without source mapping
     assert!(
-        r.issues.iter().any(|i| i.rule == Rule::MissingBoundaryTest) || r.stats.total_tests > 0,
-        "expected MissingBoundaryTest or at least parsed tests"
+        r.issues.iter().any(|i| i.rule == Rule::MissingBoundaryTest),
+        "expected MissingBoundaryTest issue, got: {:?}",
+        r.issues
+            .iter()
+            .map(|i| (&i.rule, &i.message))
+            .collect::<Vec<_>>()
     );
 }
 

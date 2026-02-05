@@ -1018,3 +1018,25 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod proptest_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(200))]
+
+        #[test]
+        fn source_parser_never_panics(ref input in ".{0,500}") {
+            let mut ts_parser = crate::parser::TypeScriptParser::new().unwrap();
+            if let Ok(tree) = ts_parser.parse(input) {
+                let parser = SourceFileParser::new(input);
+                let _exports = parser.extract_exports(&tree);
+                let _throwables = parser.extract_throwable_functions(&tree);
+                let _boundaries = parser.extract_boundary_conditions(&tree);
+                let _details = parser.extract_function_details(&tree);
+            }
+        }
+    }
+}
