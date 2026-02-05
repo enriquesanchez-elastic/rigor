@@ -1,0 +1,25 @@
+{
+  "threshold": 70,
+  "framework": "auto",
+  "rules": {
+    "weak-assertion": "warning",
+    "missing-error-test": "warning",
+    "flaky-pattern": "warning",
+    "snapshot-overuse": "off"
+  },
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.e2e.test.ts",
+    "**/legacy/**"
+  ],
+  "sourceMapping": {
+    "mode": "auto"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.e2e.test.ts", "**/*.e2e.spec.ts"],
+      "skipSourceAnalysis": true
+    }
+  ]
+}

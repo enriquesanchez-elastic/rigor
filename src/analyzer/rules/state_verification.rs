@@ -83,3 +83,68 @@ impl AnalysisRule for StateVerificationRule {
         25
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Assertion, AssertionKind, Issue, Location, TestCase};
+
+    fn make_test(name: &str, assertions: Vec<Assertion>) -> TestCase {
+        TestCase {
+            name: name.to_string(),
+            location: Location::new(1, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions,
+            describe_block: None,
+        }
+    }
+
+    fn make_assertion(kind: AssertionKind, raw: &str) -> Assertion {
+        Assertion {
+            kind: kind.clone(),
+            quality: kind.quality(),
+            location: Location::new(1, 1),
+            raw: raw.to_string(),
+        }
+    }
+
+    #[test]
+    fn positive_detects_side_effect_name_with_only_return_assertion() {
+        let rule = StateVerificationRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let tests = vec![make_test(
+            "should update user",
+            vec![make_assertion(AssertionKind::ToBe, "expect(result).toBe(true)")],
+        )];
+        let issues = rule.analyze(&tests, "", &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::StateVerification));
+    }
+
+    #[test]
+    fn negative_no_issue_when_no_side_effect_name() {
+        let rule = StateVerificationRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let tests = vec![make_test(
+            "returns sum",
+            vec![make_assertion(AssertionKind::ToBe, "expect(add(1,2)).toBe(3)")],
+        )];
+        let issues = rule.analyze(&tests, "", &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn score_returns_25() {
+        let rule = StateVerificationRule::new();
+        let tests: Vec<TestCase> = vec![];
+        let issues: Vec<Issue> = vec![];
+        assert_eq!(rule.calculate_score(&tests, &issues), 25);
+    }
+}

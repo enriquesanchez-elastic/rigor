@@ -147,3 +147,74 @@ impl AnalysisRule for DebugCodeRule {
         score.clamp(0, 25) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Issue, Location, Severity, TestCase};
+
+    fn make_empty_tests() -> Vec<TestCase> {
+        vec![TestCase {
+            name: "test".to_string(),
+            location: Location::new(1, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: None,
+        }]
+    }
+
+    #[test]
+    fn positive_detects_console_log() {
+        let rule = DebugCodeRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "  console.log(debug);";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::DebugCode));
+    }
+
+    #[test]
+    fn positive_detects_it_only() {
+        let rule = DebugCodeRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "it.only('test', () => { expect(1).toBe(1); });";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::FocusedTest));
+    }
+
+    #[test]
+    fn negative_clean_source_no_issues() {
+        let rule = DebugCodeRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "it('adds numbers', () => { expect(1 + 1).toBe(2); });";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = DebugCodeRule::new();
+        let tests = make_empty_tests();
+        let zero_issues: Vec<Issue> = vec![];
+        let one_debug = vec![Issue {
+            rule: Rule::DebugCode,
+            severity: Severity::Info,
+            message: "test".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
+        assert_eq!(rule.calculate_score(&tests, &one_debug), 23);
+    }
+}

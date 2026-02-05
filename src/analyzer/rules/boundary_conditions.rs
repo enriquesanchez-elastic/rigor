@@ -216,6 +216,21 @@ mod tests {
     }
 
     #[test]
+    fn test_boundary_not_detected_when_not_mentioned() {
+        let tests = vec![make_test(
+            "basic test",
+            vec![Assertion {
+                kind: AssertionKind::ToBe,
+                quality: AssertionKind::ToBe.quality(),
+                location: Location::new(1, 1),
+                raw: "expect(x).toBe(42)".to_string(),
+            }],
+        )];
+
+        assert!(!BoundaryConditionsRule::tests_cover_boundary(&tests, "18", ">="));
+    }
+
+    #[test]
     fn test_missing_edge_case_detection() {
         let tests = vec![make_test(
             "basic test",

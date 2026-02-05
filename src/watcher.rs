@@ -104,3 +104,121 @@ impl TestWatcher {
         all.into_iter().collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_is_test_file_ts() {
+        assert!(TestWatcher::is_test_file(Path::new("auth.test.ts")));
+        assert!(TestWatcher::is_test_file(Path::new("auth.spec.ts")));
+        assert!(TestWatcher::is_test_file(Path::new("Button.test.tsx")));
+        assert!(TestWatcher::is_test_file(Path::new("Button.spec.tsx")));
+    }
+
+    #[test]
+    fn test_is_test_file_js() {
+        assert!(TestWatcher::is_test_file(Path::new("auth.test.js")));
+        assert!(TestWatcher::is_test_file(Path::new("auth.spec.js")));
+        assert!(TestWatcher::is_test_file(Path::new("Button.test.jsx")));
+        assert!(TestWatcher::is_test_file(Path::new("Button.spec.jsx")));
+    }
+
+    #[test]
+    fn test_is_test_file_non_test() {
+        assert!(!TestWatcher::is_test_file(Path::new("auth.ts")));
+        assert!(!TestWatcher::is_test_file(Path::new("index.js")));
+        assert!(!TestWatcher::is_test_file(Path::new("README.md")));
+        assert!(!TestWatcher::is_test_file(Path::new("package.json")));
+    }
+
+    #[test]
+    fn test_is_test_file_node_modules_excluded() {
+        assert!(!TestWatcher::is_test_file(Path::new(
+            "node_modules/jest/test.test.ts"
+        )));
+        assert!(!TestWatcher::is_test_file(Path::new(
+            "project/node_modules/lib/auth.test.js"
+        )));
+    }
+
+    #[test]
+    fn test_is_test_file_nested_path() {
+        assert!(TestWatcher::is_test_file(Path::new(
+            "src/auth/login.test.ts"
+        )));
+        assert!(TestWatcher::is_test_file(Path::new(
+            "tests/__tests__/Button.spec.tsx"
+        )));
+    }
+
+    #[test]
+    fn test_is_test_file_no_name() {
+        // Path with no file name
+        assert!(!TestWatcher::is_test_file(Path::new("")));
+    }
+
+    #[test]
+    fn test_is_create_or_modify() {
+        use notify::event::{CreateKind, ModifyKind, RemoveKind};
+        assert!(is_create_or_modify(&EventKind::Create(CreateKind::File)));
+        assert!(is_create_or_modify(&EventKind::Modify(
+            ModifyKind::Data(notify::event::DataChange::Content)
+        )));
+        assert!(!is_create_or_modify(&EventKind::Remove(
+            RemoveKind::File
+        )));
+    }
+
+    #[test]
+    fn test_paths_from_event_filters_test_files() {
+        use notify::event::{CreateKind, RemoveKind};
+
+        // Create event with mixed paths
+        let event = notify::Event {
+            kind: EventKind::Create(CreateKind::File),
+            paths: vec![
+                PathBuf::from("src/auth.test.ts"),
+                PathBuf::from("src/auth.ts"),
+                PathBuf::from("src/cart.spec.js"),
+            ],
+            attrs: Default::default(),
+        };
+
+        let paths = TestWatcher::paths_from_event(&event);
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&PathBuf::from("src/auth.test.ts")));
+        assert!(paths.contains(&PathBuf::from("src/cart.spec.js")));
+
+        // Remove event should return empty
+        let remove_event = notify::Event {
+            kind: EventKind::Remove(RemoveKind::File),
+            paths: vec![PathBuf::from("src/auth.test.ts")],
+            attrs: Default::default(),
+        };
+        let paths = TestWatcher::paths_from_event(&remove_event);
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_watch_creates_watcher() {
+        // Verify that TestWatcher::watch succeeds and doesn't panic
+        let dir = tempfile::TempDir::new().unwrap();
+        let watcher = TestWatcher::watch(dir.path());
+        assert!(watcher.is_ok(), "watch should succeed on a temp dir");
+        // Note: next_changes() blocks for up to 3600s, so we don't call it in unit tests.
+        // The watcher integration is best tested manually or in a dedicated integration test.
+    }
+
+    #[test]
+    fn test_watch_single_file_parent() {
+        // When watching a single file, it should watch the parent directory
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("test.test.ts");
+        std::fs::write(&file, "test").unwrap();
+        let watcher = TestWatcher::watch(&file);
+        assert!(watcher.is_ok(), "watch should succeed for a single file");
+    }
+}

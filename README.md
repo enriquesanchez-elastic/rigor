@@ -159,6 +159,27 @@ This mutates the source file (e.g., `>=` → `>`, `return x` → `return null`),
 
 See [docs/mutation-testing.md](docs/mutation-testing.md) for operators and usage.
 
+## Development
+
+```bash
+# Build
+cargo build --release
+
+# Run tests
+cargo test --all-features
+
+# Coverage (requires llvm-tools-preview and cargo-llvm-cov)
+rustup component add llvm-tools-preview
+cargo install cargo-llvm-cov
+# Generate coverage (runs test suite and writes .profraw into target/). Do this first.
+cargo llvm-cov test --all-features --lcov --output-path lcov.info
+# Then, in the same session (don't clear target/), view the report:
+cargo llvm-cov report                    # summary in terminal
+cargo llvm-cov report --html             # open target/llvm-cov/html/index.html
+```
+
+CI runs coverage on every push; the lcov report is uploaded as a workflow artifact.
+
 ## Documentation
 
 - [Configuration](docs/configuration.md) - All config options, extends, overrides

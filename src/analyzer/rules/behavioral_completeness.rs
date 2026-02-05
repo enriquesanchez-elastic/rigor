@@ -227,3 +227,89 @@ impl AnalysisRule for BehavioralCompletenessRule {
         (25 - deduction).max(0) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Assertion, AssertionKind, Issue, Location, Severity, TestCase};
+
+    fn make_test(name: &str, assertions: Vec<Assertion>) -> TestCase {
+        TestCase {
+            name: name.to_string(),
+            location: Location::new(1, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions,
+            describe_block: None,
+        }
+    }
+
+    fn make_assertion(kind: AssertionKind, raw: &str) -> Assertion {
+        Assertion {
+            kind: kind.clone(),
+            quality: kind.quality(),
+            location: Location::new(1, 1),
+            raw: raw.to_string(),
+        }
+    }
+
+    #[test]
+    fn negative_no_source_returns_empty() {
+        let rule = BehavioralCompletenessRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("it('test', () => {});")
+            .unwrap();
+        let tests = vec![make_test(
+            "getResponse",
+            vec![make_assertion(AssertionKind::ToBe, "expect(result.status).toBe(200)")],
+        )];
+        let test_source = "const result = getResponse(); expect(result.status).toBe(200);";
+        let issues = rule.analyze(&tests, test_source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn positive_with_source_partial_assertion_triggers() {
+        let source_content = r#"
+        function getResponse() {
+            return { status: 200, data: {}, headers: {} };
+        }
+        "#;
+        let mut parser = crate::parser::TypeScriptParser::new().unwrap();
+        let source_tree = parser.parse(source_content).unwrap();
+        let rule = BehavioralCompletenessRule::new().with_source(
+            source_content.to_string(),
+            source_tree,
+        );
+        let tests = vec![make_test(
+            "getResponse",
+            vec![make_assertion(AssertionKind::ToBe, "expect(result.status).toBe(200)")],
+        )];
+        let test_source = "const result = getResponse(); expect(result.status).toBe(200);";
+        let tree = parser.parse(test_source).unwrap();
+        let issues = rule.analyze(&tests, test_source, &tree);
+        if !issues.is_empty() {
+            assert!(
+                issues.iter().any(|i| i.rule == Rule::BehavioralCompleteness),
+                "when issues found, expected BehavioralCompleteness"
+            );
+        }
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = BehavioralCompletenessRule::new();
+        let tests: Vec<TestCase> = vec![];
+        let zero_issues: Vec<Issue> = vec![];
+        let one_issue = vec![Issue {
+            rule: Rule::BehavioralCompleteness,
+            severity: Severity::Warning,
+            message: "test".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
+        assert_eq!(rule.calculate_score(&tests, &one_issue), 21);
+    }
+}

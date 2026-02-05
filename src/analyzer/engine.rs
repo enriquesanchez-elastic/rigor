@@ -352,57 +352,59 @@ impl Default for Score {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Config, RuleSeverity, SourceMappingConfig, SourceMappingMode};
+    use std::collections::HashMap;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
+    fn make_test_file(content: &str) -> NamedTempFile {
+        let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        file.flush().unwrap();
+        file
+    }
+
     #[test]
     fn test_analyze_simple_file() {
-        let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
-        writeln!(
-            file,
+        let file = make_test_file(
             r#"
-            describe('example', () => {{
-                it('should work', () => {{
+            describe('example', () => {
+                it('should work', () => {
                     expect(1).toBe(1);
-                }});
-            }});
-        "#
-        )
-        .unwrap();
+                });
+            });
+        "#,
+        );
 
         let engine = AnalysisEngine::new().without_source_analysis();
         let result = engine.analyze(file.path(), None).unwrap();
 
         assert_eq!(result.stats.total_tests, 1);
         assert_eq!(result.stats.total_assertions, 1);
-        assert!(result.score.value > 0);
-        // Trivial assertion (expect(1).toBe(1)) and vague name should incur penalty — not A
         assert!(
-            result.score.value < 90,
-            "file with trivial assertion should not get A (got {})",
+            result.score.value >= 50 && result.score.value <= 88,
+            "expected score 50–88 for trivial+vague file, got {}",
             result.score.value
         );
+        assert!(result.score.value < 90, "trivial assertion should not get A");
     }
 
     #[test]
     fn test_issue_penalty_lowers_grade() {
-        let mut file = NamedTempFile::with_suffix(".test.ts").unwrap();
-        writeln!(
-            file,
+        let file = make_test_file(
             r#"
-            describe('bad', () => {{
-                it('test 1', () => {{
+            describe('bad', () => {
+                it('test 1', () => {
                     const x = 1;
                     expect(x).toBeDefined();
                     expect(x).toBeTruthy();
-                }});
-                it('test 2', () => {{
+                });
+                it('test 2', () => {
                     expect(1).toBe(1);
-                }});
-            }});
-        "#
-        )
-        .unwrap();
+                });
+            });
+        "#,
+        );
 
         let engine = AnalysisEngine::new().without_source_analysis();
         let result = engine.analyze(file.path(), None).unwrap();
@@ -412,12 +414,275 @@ mod tests {
             !result.issues.is_empty(),
             "should report weak/trivial issues"
         );
-        // Many issues (weak assertions, trivial, vague names) should pull score down to C or worse
         assert!(
             result.score.value < 80,
             "file with weak + trivial assertions and vague names should not get B or A (got {} = {})",
             result.score.value,
             result.score.grade
         );
+        assert!(result.score.value >= 20, "penalty should not push below 20 for this file");
+    }
+
+    #[test]
+    fn test_analyze_many() {
+        let file1 = make_test_file(
+            r#"
+            describe('auth', () => {
+                it('validates email format', () => {
+                    expect(isValid('a@b.com')).toBe(true);
+                });
+            });
+        "#,
+        );
+        let file2 = make_test_file(
+            r#"
+            describe('cart', () => {
+                it('adds item correctly', () => {
+                    expect(add(1, 2)).toBe(3);
+                });
+            });
+        "#,
+        );
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let paths: Vec<&Path> = vec![file1.path(), file2.path()];
+        let results = engine.analyze_many(&paths, None);
+
+        assert_eq!(results.len(), 2, "analyze_many should return two results");
+        assert!(results[0].is_ok(), "first result should succeed");
+        assert!(results[1].is_ok(), "second result should succeed");
+
+        let r0 = results[0].as_ref().unwrap();
+        let r1 = results[1].as_ref().unwrap();
+        assert_eq!(r0.stats.total_tests, 1);
+        assert_eq!(r1.stats.total_tests, 1);
+    }
+
+    #[test]
+    fn test_analyze_parallel() {
+        let file1 = make_test_file(
+            r#"
+            describe('auth', () => {
+                it('validates email format', () => {
+                    expect(isValid('a@b.com')).toBe(true);
+                });
+            });
+        "#,
+        );
+        let file2 = make_test_file(
+            r#"
+            describe('cart', () => {
+                it('adds item correctly', () => {
+                    expect(add(1, 2)).toBe(3);
+                });
+            });
+        "#,
+        );
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let paths: Vec<PathBuf> = vec![file1.path().to_path_buf(), file2.path().to_path_buf()];
+        let results = engine.analyze_parallel(&paths, None);
+
+        assert_eq!(results.len(), 2, "analyze_parallel should return two results");
+        let ok_count = results.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(ok_count, 2, "both results should succeed");
+    }
+
+    #[test]
+    fn test_aggregate_stats_empty() {
+        let stats = AnalysisEngine::aggregate_stats(&[]);
+        assert_eq!(stats.files_analyzed, 0);
+        assert_eq!(stats.total_tests, 0);
+        assert_eq!(stats.total_issues, 0);
+        assert_eq!(stats.average_score.value, 0);
+    }
+
+    #[test]
+    fn test_aggregate_stats_multiple() {
+        let file1 = make_test_file(
+            r#"
+            describe('a', () => {
+                it('validates email format', () => { expect(isValid('a@b.com')).toBe(true); });
+                it('rejects bad email', () => { expect(isValid('bad')).toBe(false); });
+            });
+        "#,
+        );
+        let file2 = make_test_file(
+            r#"
+            describe('b', () => {
+                it('adds correctly', () => { expect(add(1,2)).toBe(3); });
+            });
+        "#,
+        );
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let r1 = engine.analyze(file1.path(), None).unwrap();
+        let r2 = engine.analyze(file2.path(), None).unwrap();
+
+        let stats = AnalysisEngine::aggregate_stats(&[r1.clone(), r2.clone()]);
+        assert_eq!(stats.files_analyzed, 2);
+        assert_eq!(stats.total_tests, r1.stats.total_tests + r2.stats.total_tests);
+        assert_eq!(stats.total_issues, r1.issues.len() + r2.issues.len());
+        let expected_avg = ((r1.score.value as u32 + r2.score.value as u32) / 2) as u8;
+        assert_eq!(stats.average_score.value, expected_avg);
+    }
+
+    #[test]
+    fn test_apply_config_rule_off() {
+        let file = make_test_file(
+            r#"
+            describe('auth', () => {
+                it('test 1', () => {
+                    expect(1).toBe(1);
+                });
+            });
+        "#,
+        );
+
+        // First, analyze without config to see which rules fire
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let result_no_config = engine.analyze(file.path(), None).unwrap();
+        let has_trivial = result_no_config
+            .issues
+            .iter()
+            .any(|i| i.rule == crate::Rule::TrivialAssertion);
+        assert!(has_trivial, "should detect trivial assertion without config");
+
+        // Now analyze with config that turns off trivial-assertion
+        let mut rules = HashMap::new();
+        rules.insert("trivial-assertion".to_string(), RuleSeverity::Off);
+        let config = Config {
+            rules,
+            ..Config::default()
+        };
+
+        let result_with_config = engine.analyze(file.path(), Some(&config)).unwrap();
+        let has_trivial_now = result_with_config
+            .issues
+            .iter()
+            .any(|i| i.rule == crate::Rule::TrivialAssertion);
+        assert!(
+            !has_trivial_now,
+            "trivial-assertion should be filtered out when rule is off"
+        );
+    }
+
+    #[test]
+    fn test_apply_config_override_severity() {
+        let file = make_test_file(
+            r#"
+            describe('auth', () => {
+                it('test 1', () => {
+                    expect(1).toBe(1);
+                });
+            });
+        "#,
+        );
+
+        let mut rules = HashMap::new();
+        rules.insert("trivial-assertion".to_string(), RuleSeverity::Info);
+        let config = Config {
+            rules,
+            ..Config::default()
+        };
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let result = engine.analyze(file.path(), Some(&config)).unwrap();
+
+        let trivial_issues: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.rule == crate::Rule::TrivialAssertion)
+            .collect();
+        assert!(
+            !trivial_issues.is_empty(),
+            "trivial-assertion should still appear with severity override"
+        );
+        for issue in &trivial_issues {
+            assert_eq!(
+                issue.severity,
+                crate::Severity::Info,
+                "trivial-assertion severity should be overridden to Info"
+            );
+        }
+    }
+
+    #[test]
+    fn test_analyze_with_source_mapping_off() {
+        let file = make_test_file(
+            r#"
+            describe('auth', () => {
+                it('authenticates user', () => {
+                    expect(authenticate('user', 'pass')).toBe(true);
+                });
+            });
+        "#,
+        );
+
+        let config = Config {
+            source_mapping: SourceMappingConfig {
+                mode: SourceMappingMode::Off,
+                ..SourceMappingConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let engine = AnalysisEngine::new()
+            .with_project_root(PathBuf::from("test-repos/fake-project"));
+        let result = engine.analyze(file.path(), Some(&config)).unwrap();
+
+        assert!(
+            result.source_file.is_none(),
+            "source_file should be None when sourceMapping mode is Off"
+        );
+    }
+
+    #[test]
+    fn test_analyze_with_skip_source_via_override() {
+        let file = make_test_file(
+            r#"
+            describe('e2e login', () => {
+                it('logs in successfully', () => {
+                    expect(page.url()).toContain('/dashboard');
+                });
+            });
+        "#,
+        );
+
+        let config: Config = serde_json::from_str(
+            r#"{
+                "overrides": [
+                    {
+                        "files": ["**/*.test.ts"],
+                        "skipSourceAnalysis": true
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let engine = AnalysisEngine::new()
+            .with_project_root(PathBuf::from("test-repos/fake-project"));
+        let result = engine.analyze(file.path(), Some(&config)).unwrap();
+
+        assert!(
+            result.source_file.is_none(),
+            "source_file should be None when skipSourceAnalysis is true via override"
+        );
+    }
+
+    #[test]
+    fn test_default_engine() {
+        let engine = AnalysisEngine::default();
+        // Default engine should have source analysis enabled
+        let file = make_test_file(
+            r#"
+            describe('x', () => {
+                it('works', () => { expect(1).toBe(1); });
+            });
+        "#,
+        );
+        let result = engine.analyze(file.path(), None);
+        assert!(result.is_ok());
     }
 }

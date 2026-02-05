@@ -557,6 +557,7 @@ impl SourceMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn test_strip_test_suffix() {
@@ -612,5 +613,161 @@ mod tests {
             "src/auth.ts",
             "tests/**/*.test.ts"
         ));
+    }
+
+    #[test]
+    fn test_find_source_file_adjacent() {
+        // Setup: test file and source file in the same directory
+        let dir = tempfile::TempDir::new().unwrap();
+        let src_path = dir.path().join("auth.ts");
+        let test_path = dir.path().join("auth.test.ts");
+        fs::write(&src_path, "export function auth() {}").unwrap();
+        fs::write(&test_path, "import { auth } from './auth';").unwrap();
+
+        let mapper = SourceMapper::new();
+        let result = mapper.find_source_file(&test_path);
+        assert!(
+            result.is_some(),
+            "should find adjacent source file"
+        );
+        assert_eq!(
+            result.unwrap().file_name().unwrap().to_str().unwrap(),
+            "auth.ts"
+        );
+    }
+
+    #[test]
+    fn test_find_source_file_tests_to_src() {
+        // Setup: test-repos/fake-project style layout
+        let dir = tempfile::TempDir::new().unwrap();
+        let tests_dir = dir.path().join("tests");
+        let src_dir = dir.path().join("src");
+        fs::create_dir_all(&tests_dir).unwrap();
+        fs::create_dir_all(&src_dir).unwrap();
+
+        let src_file = src_dir.join("cart.ts");
+        let test_file = tests_dir.join("cart.test.ts");
+        fs::write(&src_file, "export class Cart {}").unwrap();
+        fs::write(&test_file, "import { Cart } from '../src/cart';").unwrap();
+        // Create package.json so project root is found
+        fs::write(dir.path().join("package.json"), "{}").unwrap();
+
+        let mapper = SourceMapper::new().with_project_root(dir.path().to_path_buf());
+        let result = mapper.find_source_file(&test_file);
+        assert!(result.is_some(), "should find source in src/ from tests/");
+        let source = result.unwrap();
+        assert!(
+            source.to_string_lossy().contains("cart.ts"),
+            "source should be cart.ts, got {:?}",
+            source
+        );
+    }
+
+    #[test]
+    fn test_find_source_file_no_match() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let test_file = dir.path().join("nonexistent.test.ts");
+        fs::write(&test_file, "test file").unwrap();
+
+        let mapper = SourceMapper::new();
+        let result = mapper.find_source_file(&test_file);
+        assert!(result.is_none(), "should return None when no source found");
+    }
+
+    #[test]
+    fn test_find_source_file_off_mode() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let src_path = dir.path().join("auth.ts");
+        let test_path = dir.path().join("auth.test.ts");
+        fs::write(&src_path, "export function auth() {}").unwrap();
+        fs::write(&test_path, "test content").unwrap();
+
+        let config = SourceMappingConfig {
+            mode: SourceMappingMode::Off,
+            ..SourceMappingConfig::default()
+        };
+        let mapper = SourceMapper::with_config(config);
+        let result = mapper.find_source_file(&test_path);
+        assert!(
+            result.is_none(),
+            "should return None when mode is Off"
+        );
+    }
+
+    #[test]
+    fn test_find_source_file_dunder_tests() {
+        // __tests__/Button.test.tsx -> Button.tsx in parent directory
+        let dir = tempfile::TempDir::new().unwrap();
+        let tests_dir = dir.path().join("__tests__");
+        fs::create_dir_all(&tests_dir).unwrap();
+
+        let src_file = dir.path().join("Button.tsx");
+        let test_file = tests_dir.join("Button.test.tsx");
+        fs::write(&src_file, "export const Button = () => {};").unwrap();
+        fs::write(&test_file, "import { Button } from '../Button';").unwrap();
+
+        let mapper = SourceMapper::new();
+        let result = mapper.find_source_file(&test_file);
+        assert!(result.is_some(), "should find source from __tests__ pattern");
+        assert_eq!(
+            result.unwrap().file_name().unwrap().to_str().unwrap(),
+            "Button.tsx"
+        );
+    }
+
+    #[test]
+    fn test_find_in_dir_various_extensions() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // No files yet
+        assert!(SourceMapper::find_in_dir(dir.path(), "foo").is_none());
+
+        // Create a .tsx file
+        fs::write(dir.path().join("foo.tsx"), "").unwrap();
+        let result = SourceMapper::find_in_dir(dir.path(), "foo");
+        assert!(result.is_some());
+        assert!(result.unwrap().to_string_lossy().ends_with("foo.tsx"));
+
+        // Create a .ts file (should be found first due to extension order)
+        fs::write(dir.path().join("foo.ts"), "").unwrap();
+        let result = SourceMapper::find_in_dir(dir.path(), "foo");
+        assert!(result.is_some());
+        assert!(result.unwrap().to_string_lossy().ends_with("foo.ts"));
+    }
+
+    #[test]
+    fn test_find_in_dir_nonexistent() {
+        let result = SourceMapper::find_in_dir(Path::new("/nonexistent/dir"), "foo");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_with_config_and_project_root() {
+        let config = SourceMappingConfig {
+            mode: SourceMappingMode::Auto,
+            source_root: Some("lib".to_string()),
+            ..SourceMappingConfig::default()
+        };
+        let mapper = SourceMapper::with_config(config)
+            .with_project_root(PathBuf::from("/project"));
+        // Just verify construction doesn't panic
+        assert!(mapper.project_root.is_some());
+        assert_eq!(
+            mapper.config.source_root,
+            Some("lib".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_source_static_method() {
+        // find_source is a static method that creates a new mapper internally
+        let dir = tempfile::TempDir::new().unwrap();
+        let src_path = dir.path().join("utils.ts");
+        let test_path = dir.path().join("utils.test.ts");
+        fs::write(&src_path, "export const x = 1;").unwrap();
+        fs::write(&test_path, "test content").unwrap();
+
+        let result = SourceMapper::find_source(&test_path);
+        assert!(result.is_some());
     }
 }

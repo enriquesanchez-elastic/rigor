@@ -111,3 +111,54 @@ impl AnalysisRule for AsyncPatternsRule {
         score.clamp(0, 25) as u8
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Issue, Location, Severity, TestCase};
+
+    fn make_empty_tests() -> Vec<TestCase> {
+        vec![]
+    }
+
+    #[test]
+    fn positive_detects_resolves_without_await() {
+        let rule = AsyncPatternsRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "expect(promise).resolves.toBe(5);";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(!issues.is_empty());
+        assert!(issues.iter().any(|i| i.rule == Rule::MissingAwait));
+    }
+
+    #[test]
+    fn negative_await_expect_no_issue() {
+        let rule = AsyncPatternsRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "await expect(asyncFn()).resolves.toBe(42);";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn score_decreases_with_issues() {
+        let rule = AsyncPatternsRule::new();
+        let tests = make_empty_tests();
+        let zero_issues: Vec<Issue> = vec![];
+        let one_issue = vec![Issue {
+            rule: Rule::MissingAwait,
+            severity: Severity::Warning,
+            message: "test".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+        }];
+        assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
+        assert_eq!(rule.calculate_score(&tests, &one_issue), 22);
+    }
+}

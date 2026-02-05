@@ -144,12 +144,23 @@ mod tests {
         };
 
         let score = ScoreCalculator::calculate(&breakdown);
-        assert!(score.value >= 70);
-        assert!(matches!(score.grade, Grade::A | Grade::B | Grade::C));
+        // total() normalizes sum (max 125) to 0-100: (95 * 100) / 125 = 76
+        assert_eq!(score.value, 76);
+        assert_eq!(score.grade, Grade::C);
     }
 
     #[test]
     fn test_grade_from_score() {
+        assert_eq!(Grade::from_score(100), Grade::A);
+        assert_eq!(Grade::from_score(90), Grade::A);
+        assert_eq!(Grade::from_score(89), Grade::B);
+        assert_eq!(Grade::from_score(80), Grade::B);
+        assert_eq!(Grade::from_score(79), Grade::C);
+        assert_eq!(Grade::from_score(70), Grade::C);
+        assert_eq!(Grade::from_score(69), Grade::D);
+        assert_eq!(Grade::from_score(60), Grade::D);
+        assert_eq!(Grade::from_score(59), Grade::F);
+        assert_eq!(Grade::from_score(0), Grade::F);
         assert_eq!(Grade::from_score(95), Grade::A);
         assert_eq!(Grade::from_score(85), Grade::B);
         assert_eq!(Grade::from_score(75), Grade::C);

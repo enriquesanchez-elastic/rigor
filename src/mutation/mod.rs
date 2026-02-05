@@ -129,3 +129,158 @@ pub fn run_batch_mutation_test(
         total_survived,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_mutation(desc: &str) -> Mutation {
+        Mutation {
+            start: 0,
+            end: 2,
+            line: 1,
+            column: 1,
+            original: ">=".to_string(),
+            replacement: ">".to_string(),
+            description: desc.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_mutation_result_score_normal() {
+        let result = MutationResult {
+            source_path: PathBuf::from("src/foo.ts"),
+            total: 10,
+            killed: 8,
+            survived: 2,
+            details: vec![],
+        };
+        let score = result.score();
+        assert!((score - 80.0).abs() < 0.01, "expected ~80.0, got {}", score);
+    }
+
+    #[test]
+    fn test_mutation_result_score_all_killed() {
+        let result = MutationResult {
+            source_path: PathBuf::from("src/foo.ts"),
+            total: 5,
+            killed: 5,
+            survived: 0,
+            details: vec![],
+        };
+        assert!((result.score() - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_mutation_result_score_none_killed() {
+        let result = MutationResult {
+            source_path: PathBuf::from("src/foo.ts"),
+            total: 5,
+            killed: 0,
+            survived: 5,
+            details: vec![],
+        };
+        assert!((result.score() - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_mutation_result_score_empty() {
+        let result = MutationResult {
+            source_path: PathBuf::from("src/foo.ts"),
+            total: 0,
+            killed: 0,
+            survived: 0,
+            details: vec![],
+        };
+        // total == 0 → 100.0 (no mutants = perfect score)
+        assert!((result.score() - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_batch_mutation_result_construction() {
+        let r1 = MutationResult {
+            source_path: PathBuf::from("src/a.ts"),
+            total: 4,
+            killed: 3,
+            survived: 1,
+            details: vec![],
+        };
+        let r2 = MutationResult {
+            source_path: PathBuf::from("src/b.ts"),
+            total: 6,
+            killed: 5,
+            survived: 1,
+            details: vec![],
+        };
+
+        let total_mutants = r1.total + r2.total;
+        let total_killed = r1.killed + r2.killed;
+        let total_survived = total_mutants - total_killed;
+        let overall_score = (total_killed as f32 / total_mutants as f32) * 100.0;
+
+        let batch = BatchMutationResult {
+            source_results: vec![r1, r2],
+            overall_score,
+            total_mutants,
+            total_killed,
+            total_survived,
+        };
+
+        assert_eq!(batch.total_mutants, 10);
+        assert_eq!(batch.total_killed, 8);
+        assert_eq!(batch.total_survived, 2);
+        assert!((batch.overall_score - 80.0).abs() < 0.01);
+        assert_eq!(batch.source_results.len(), 2);
+    }
+
+    #[test]
+    fn test_sampler_select_all_when_fewer_than_count() {
+        let mutations = vec![
+            make_mutation(">= to >"),
+            make_mutation("true to false"),
+        ];
+        let selected = sampler::select_mutations(&mutations, 10);
+        assert_eq!(selected.len(), 2);
+    }
+
+    #[test]
+    fn test_sampler_select_empty() {
+        let selected = sampler::select_mutations(&[], 5);
+        assert!(selected.is_empty());
+    }
+
+    #[test]
+    fn test_sampler_select_respects_count() {
+        let mutations = vec![
+            make_mutation(">= to >"),
+            make_mutation("true to false"),
+            make_mutation("+ to -"),
+            make_mutation("<= to <"),
+            make_mutation("=== to !="),
+        ];
+        let selected = sampler::select_mutations(&mutations, 3);
+        assert_eq!(selected.len(), 3);
+    }
+
+    #[test]
+    fn test_sampler_prefers_boundary_operators() {
+        let mutations = vec![
+            make_mutation("+ to -"),        // priority 1
+            make_mutation(">= to >"),       // priority 3 (boundary)
+            make_mutation("true to false"),  // priority 2
+            make_mutation("<= to <"),        // priority 3 (boundary)
+            make_mutation("* to /"),         // priority 1
+        ];
+        let selected = sampler::select_mutations(&mutations, 2);
+        // Should prefer the two boundary operators
+        assert!(
+            selected.iter().any(|m| m.description == ">= to >"),
+            "should include >= boundary: {:?}",
+            selected.iter().map(|m| &m.description).collect::<Vec<_>>()
+        );
+        assert!(
+            selected.iter().any(|m| m.description == "<= to <"),
+            "should include <= boundary"
+        );
+    }
+}

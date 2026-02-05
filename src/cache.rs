@@ -217,6 +217,29 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Score, ScoreBreakdown, TestFramework, TestStats, TestType};
+
+    fn make_result(path: &str) -> AnalysisResult {
+        AnalysisResult {
+            file_path: PathBuf::from(path),
+            score: Score::new(85),
+            breakdown: ScoreBreakdown {
+                assertion_quality: 20,
+                error_coverage: 18,
+                boundary_conditions: 15,
+                test_isolation: 17,
+                input_variety: 15,
+            },
+            issues: vec![],
+            stats: TestStats {
+                total_tests: 3,
+                ..TestStats::default()
+            },
+            framework: TestFramework::Jest,
+            test_type: TestType::Unit,
+            source_file: None,
+        }
+    }
 
     #[test]
     fn test_hash_content() {
@@ -233,5 +256,155 @@ mod tests {
         let cache = AnalysisCache::disabled();
         assert!(!cache.enabled);
         assert!(cache.get(Path::new("test.ts"), "content", None).is_none());
+    }
+
+    #[test]
+    fn test_cache_disabled_set_noop() {
+        let mut cache = AnalysisCache::disabled();
+        let result = make_result("test.ts");
+        cache.set(Path::new("test.ts"), "content", None, result);
+        // get should still return None since cache is disabled
+        assert!(cache.get(Path::new("test.ts"), "content", None).is_none());
+        assert!(!cache.dirty, "disabled cache should not become dirty");
+    }
+
+    #[test]
+    fn test_cache_disabled_stats() {
+        let cache = AnalysisCache::disabled();
+        let stats = cache.stats();
+        assert!(!stats.enabled);
+        assert_eq!(stats.entries, 0);
+    }
+
+    #[test]
+    fn test_cache_roundtrip_hit() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut cache = AnalysisCache::new(dir.path());
+        let result = make_result("auth.test.ts");
+
+        cache.set(Path::new("auth.test.ts"), "const x = 1;", None, result.clone());
+        assert!(cache.dirty, "cache should be dirty after set");
+
+        let cached = cache.get(Path::new("auth.test.ts"), "const x = 1;", None);
+        assert!(cached.is_some(), "cache should hit for same content");
+        let cached = cached.unwrap();
+        assert_eq!(cached.score.value, 85);
+        assert_eq!(cached.stats.total_tests, 3);
+    }
+
+    #[test]
+    fn test_cache_roundtrip_miss_on_changed_content() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut cache = AnalysisCache::new(dir.path());
+        let result = make_result("auth.test.ts");
+
+        cache.set(Path::new("auth.test.ts"), "const x = 1;", None, result);
+
+        let cached = cache.get(Path::new("auth.test.ts"), "const x = 2;", None);
+        assert!(cached.is_none(), "cache should miss when content changes");
+    }
+
+    #[test]
+    fn test_cache_roundtrip_with_source() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut cache = AnalysisCache::new(dir.path());
+        let result = make_result("auth.test.ts");
+
+        cache.set(
+            Path::new("auth.test.ts"),
+            "test content",
+            Some("source content"),
+            result,
+        );
+
+        // Hit with same source
+        let cached = cache.get(
+            Path::new("auth.test.ts"),
+            "test content",
+            Some("source content"),
+        );
+        assert!(cached.is_some(), "should hit with same source content");
+
+        // Miss with changed source
+        let cached = cache.get(
+            Path::new("auth.test.ts"),
+            "test content",
+            Some("different source"),
+        );
+        assert!(cached.is_none(), "should miss when source content changes");
+
+        // Miss when source presence changes (cached with source, queried without)
+        let cached = cache.get(Path::new("auth.test.ts"), "test content", None);
+        assert!(
+            cached.is_none(),
+            "should miss when source presence changes"
+        );
+    }
+
+    #[test]
+    fn test_cache_save_and_load() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // Save a cache entry
+        {
+            let mut cache = AnalysisCache::new(dir.path());
+            let result = make_result("auth.test.ts");
+            cache.set(Path::new("auth.test.ts"), "content", None, result);
+            cache.save().unwrap();
+        }
+
+        // Load and verify
+        {
+            let cache = AnalysisCache::new(dir.path());
+            let cached = cache.get(Path::new("auth.test.ts"), "content", None);
+            assert!(cached.is_some(), "cache should persist across save/load");
+            assert_eq!(cached.unwrap().score.value, 85);
+        }
+    }
+
+    #[test]
+    fn test_cache_clear() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut cache = AnalysisCache::new(dir.path());
+        let result = make_result("auth.test.ts");
+        cache.set(Path::new("auth.test.ts"), "content", None, result);
+
+        assert_eq!(cache.stats().entries, 1);
+        cache.clear();
+        assert_eq!(cache.stats().entries, 0);
+        assert!(cache.get(Path::new("auth.test.ts"), "content", None).is_none());
+    }
+
+    #[test]
+    fn test_cache_cleanup() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut cache = AnalysisCache::new(dir.path());
+        cache.set(
+            Path::new("a.test.ts"),
+            "a",
+            None,
+            make_result("a.test.ts"),
+        );
+        cache.set(
+            Path::new("b.test.ts"),
+            "b",
+            None,
+            make_result("b.test.ts"),
+        );
+        assert_eq!(cache.stats().entries, 2);
+
+        // Only a.test.ts still exists
+        cache.cleanup(&[PathBuf::from("a.test.ts")]);
+        assert_eq!(cache.stats().entries, 1);
+        assert!(cache.get(Path::new("a.test.ts"), "a", None).is_some());
+        assert!(cache.get(Path::new("b.test.ts"), "b", None).is_none());
+    }
+
+    #[test]
+    fn test_cache_disabled_cleanup_noop() {
+        let mut cache = AnalysisCache::disabled();
+        // Should not panic
+        cache.cleanup(&[PathBuf::from("a.test.ts")]);
+        assert!(!cache.dirty);
     }
 }

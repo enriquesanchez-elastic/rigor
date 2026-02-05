@@ -209,12 +209,16 @@ mod tests {
 
     #[test]
     fn test_error_test_detection() {
+        // Test must reference the function name (e.g. in assertion), not just the word "error"
+        let mut throw_assertion = make_throw_assertion();
+        throw_assertion.raw = "expect(() => parseInput(invalid)).toThrow()".to_string();
         let tests = vec![make_test(
-            "should throw error on invalid input",
-            vec![make_throw_assertion()],
+            "parseInput throws on invalid input",
+            vec![throw_assertion],
         )];
 
-        assert!(ErrorCoverageRule::has_error_test(&tests, "someFunction"));
+        assert!(ErrorCoverageRule::has_error_test(&tests, "parseInput"));
+        assert!(!ErrorCoverageRule::has_error_test(&tests, "otherFunction"));
     }
 
     #[test]
