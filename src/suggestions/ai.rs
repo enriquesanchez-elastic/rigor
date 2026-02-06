@@ -441,7 +441,8 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
 | Error Coverage | {}/25 | {} |
 | Boundary Conditions | {}/25 | {} |
 | Test Isolation | {}/25 | {} |
-| Input Variety | {}/25 | {} |"#,
+| Input Variety | {}/25 | {} |
+| AI Smells | {}/25 | {} |"#,
             result.breakdown.assertion_quality,
             Self::score_status(result.breakdown.assertion_quality),
             result.breakdown.error_coverage,
@@ -452,6 +453,8 @@ Provide ONLY the fixed code snippet (the lines that need to change). No explanat
             Self::score_status(result.breakdown.test_isolation),
             result.breakdown.input_variety,
             Self::score_status(result.breakdown.input_variety),
+            result.breakdown.ai_smells,
+            Self::score_status(result.breakdown.ai_smells),
         )
     }
 

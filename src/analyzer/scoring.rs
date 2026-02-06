@@ -140,13 +140,6 @@ impl ScoreCalculator {
         test_type: TestType,
         scoring_v2: bool,
     ) -> TransparentBreakdown {
-        const PENALTY_PER_ERROR: i32 = 5;
-        const PENALTY_PER_WARNING: i32 = 2;
-        const PENALTY_PER_INFO: i32 = 1;
-        const MAX_PENALTY_FROM_ERRORS: i32 = 35;
-        const MAX_PENALTY_FROM_WARNINGS: i32 = 40;
-        const MAX_PENALTY_FROM_INFO: i32 = 15;
-
         let weights = ScoringWeights::for_test_type(test_type);
         let categories = [
             (
@@ -384,7 +377,7 @@ mod tests {
 
     #[test]
     fn test_breakdown_total_normalization() {
-        // Sum = 50, normalized = (50 * 100) / 125 = 40
+        // Sum = 60, normalized = (60 * 100) / 150 = 40
         let breakdown = ScoreBreakdown {
             assertion_quality: 10,
             error_coverage: 10,
@@ -395,7 +388,7 @@ mod tests {
         };
         assert_eq!(breakdown.total(), 40);
 
-        // Sum = 125, normalized = (125 * 100) / 125 = 100
+        // Sum = 150, normalized = (150 * 100) / 150 = 100
         let perfect = ScoreBreakdown {
             assertion_quality: 25,
             error_coverage: 25,

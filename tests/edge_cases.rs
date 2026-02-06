@@ -49,9 +49,12 @@ fn syntax_error_handled_gracefully() {
     file.write_all(b"function {{{ broken").unwrap();
     file.flush().unwrap();
     let result = analyze_path(file.path());
-    assert!(result.is_err() || result.is_ok());
-    if let Ok(r) = result {
-        assert_eq!(r.stats.total_tests, 0);
+    match &result {
+        Ok(r) => assert_eq!(
+            r.stats.total_tests, 0,
+            "syntax error file should report 0 tests when parsed"
+        ),
+        Err(_) => {}
     }
 }
 

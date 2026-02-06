@@ -87,14 +87,16 @@ pub struct ScoreBreakdown {
 
 impl ScoreBreakdown {
     pub fn total(&self) -> u8 {
-        // Six categories 0-25 each; normalize to 0-100 (sum * 100 / 150)
+        const NUM_CATEGORIES: u16 = 6;
+        const MAX_PER_CATEGORY: u16 = 25;
+        const MAX_TOTAL: u16 = NUM_CATEGORIES * MAX_PER_CATEGORY; // 150
         let sum = self.assertion_quality as u16
             + self.error_coverage as u16
             + self.boundary_conditions as u16
             + self.test_isolation as u16
             + self.input_variety as u16
             + self.ai_smells as u16;
-        ((sum * 100) / 150).min(100) as u8
+        ((sum * 100) / MAX_TOTAL).min(100) as u8
     }
 }
 
@@ -306,11 +308,17 @@ pub fn rule_scoring_category(rule: &Rule) -> Option<&'static str> {
         MissingBoundaryTest => Some("Boundary Conditions"),
         SharedState => Some("Test Isolation"),
         HardcodedValues | LimitedInputVariety | DuplicateTest => Some("Input Variety"),
-        // Phase 2.2 critical rules
-        TestComplexity | VacuousTest | RedundantTest | UnreachableTestCode | ExcessiveSetup
-        | TypeAssertionAbuse | MissingCleanup => Some("Assertion Quality"),
-        ImplementationCoupling => Some("Test Isolation"),
-        IncompleteMockVerification | AsyncErrorMishandling => Some("Error Coverage"),
+        // Phase 2.2 rules: stubs excluded from scoring until implemented
+        TestComplexity
+        | ImplementationCoupling
+        | VacuousTest
+        | IncompleteMockVerification
+        | AsyncErrorMishandling
+        | RedundantTest
+        | UnreachableTestCode
+        | ExcessiveSetup
+        | TypeAssertionAbuse
+        | MissingCleanup => None,
         // Phase 2.3 AI smells (dedicated category)
         TautologicalAssertion
         | OverMocking

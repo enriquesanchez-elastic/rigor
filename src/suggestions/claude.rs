@@ -2,7 +2,7 @@
 //!
 //! Requires the `ai` feature to be enabled:
 //! ```toml
-//! rigor = { version = "0.1", features = ["ai"] }
+//! rigor = { version = "1.0.0", features = ["ai"] }
 //! ```
 
 use crate::AnalysisResult;
@@ -88,8 +88,12 @@ impl ClaudeClient {
     #[cfg(feature = "ai")]
     pub fn send_request(&self, prompt: &str) -> Result<ClaudeResponse, ClaudeError> {
         use serde_json::json;
+        use std::time::Duration;
 
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| ClaudeError::RequestFailed(e.to_string()))?;
 
         let body = json!({
             "model": self.model,

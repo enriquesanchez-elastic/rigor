@@ -28,10 +28,9 @@ fn good_test_scores_b_or_above() {
 }
 
 #[test]
-fn weak_assertions_scores_f() {
+fn weak_assertions_scores_below_95() {
     let r = analyze("test-repos/fake-project/tests/weak-assertions.test.ts");
     assert!(!r.issues.is_empty(), "weak-assertions should report issues");
-    // With 6-category scoring, penalties are distributed; we require bad files not be near-perfect
     assert!(
         r.score.value < 95,
         "weak-assertions = {} ({})",
@@ -41,10 +40,9 @@ fn weak_assertions_scores_f() {
 }
 
 #[test]
-fn mixed_bad_scores_f() {
+fn mixed_bad_scores_below_95() {
     let r = analyze("test-repos/fake-project/tests/mixed-bad.test.ts");
     assert!(!r.issues.is_empty(), "mixed-bad should report issues");
-    // With 6-category scoring, penalties are distributed; we require bad files not be near-perfect
     assert!(
         r.score.value < 95,
         "mixed-bad = {} ({})",
@@ -231,4 +229,30 @@ fn rtl_patterns_detected() {
         r.issues.iter().any(|i| i.rule == Rule::RtlPreferScreen),
         "expected RtlPreferScreen in Button.bad.test.tsx"
     );
+}
+
+// --- Stub rules excluded from scoring (Phase 2.2) ---
+
+#[test]
+fn phase_2_2_stub_rules_excluded_from_scoring() {
+    use rigor::rule_scoring_category;
+    let stub_rules = [
+        Rule::TestComplexity,
+        Rule::ImplementationCoupling,
+        Rule::VacuousTest,
+        Rule::IncompleteMockVerification,
+        Rule::AsyncErrorMishandling,
+        Rule::RedundantTest,
+        Rule::UnreachableTestCode,
+        Rule::ExcessiveSetup,
+        Rule::TypeAssertionAbuse,
+        Rule::MissingCleanup,
+    ];
+    for rule in &stub_rules {
+        assert!(
+            rule_scoring_category(rule).is_none(),
+            "Phase 2.2 stub rule {:?} must be excluded from scoring until implemented",
+            rule
+        );
+    }
 }

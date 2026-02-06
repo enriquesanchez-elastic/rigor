@@ -1,6 +1,6 @@
 # Rules Reference
 
-Rigor includes 28 rules across several categories.
+Rigor includes 34 active rules across several categories. Ten Phase 2.2 rules (test-complexity, implementation-coupling, vacuous-test, incomplete-mock-verification, async-error-mishandling, redundant-test, unreachable-test-code, excessive-setup, type-assertion-abuse, missing-cleanup) are planned but not yet implemented and are excluded from scoring.
 
 ## Assertion Quality
 
@@ -71,6 +71,17 @@ These rules only run when `@testing-library/react` or `@testing-library/dom` is 
 | `boundary-specificity` | Info | Boundary test doesn't assert exact value |
 | `state-verification` | Info | Test only checks return value, not state changes |
 | `assertion-intent-mismatch` | Warning | Test name suggests outcome but no assertion verifies it |
+
+## AI Smells
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| `ai-smell-tautological-assertion` | Warning | Tautological assertion (e.g. `expect(x).toBe(x)`) |
+| `ai-smell-over-mocking` | Info | Too many mocks, testing implementation |
+| `ai-smell-shallow-variety` | Info | Narrow input range |
+| `ai-smell-happy-path-only` | Info | No error or edge tests |
+| `ai-smell-parrot-assertion` | Info | Repeats spec wording without real check |
+| `ai-smell-boilerplate-padding` | Info | Generic setup, low signal |
 
 ## Configuring Rules
 

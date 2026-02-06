@@ -64,7 +64,7 @@ rigor src/ --watch
 | **Flaky Patterns** | `Date.now()`, `Math.random()`, unmocked fetch |
 | **React Testing Library** | `querySelector` vs `getByRole`, `fireEvent` vs `userEvent` |
 
-See [docs/rules.md](docs/rules.md) for the full list of 28 rules.
+See [docs/rules.md](docs/rules.md) for the full list of 34 rules.
 
 ## Output
 
@@ -89,7 +89,7 @@ See [docs/rules.md](docs/rules.md) for the full list of 28 rules.
 | D | 60-69 | Poor |
 | F | 0-59 | Needs work |
 
-Score is based on five categories (assertion quality, error coverage, boundary conditions, test isolation, input variety) minus penalties for issues found. See [docs/scoring.md](docs/scoring.md) for details.
+Score is based on six categories (assertion quality, error coverage, boundary conditions, test isolation, input variety, AI smells) minus penalties for issues found. See [docs/scoring.md](docs/scoring.md) for details.
 
 ## Configuration
 
@@ -122,7 +122,8 @@ Options:
   -q, --quiet             Minimal output (scores only)
   -v, --verbose           Show all issues
   -t, --threshold <N>     Exit 1 if score below N
-  --fix                   Generate AI improvement prompt
+  --fix                   Apply auto-fixes where possible
+  --suggest               Generate AI improvement prompt
   --watch                 Re-analyze on file changes
   --sarif                 SARIF output for GitHub Code Scanning
   --staged                Only analyze git staged files
@@ -183,7 +184,7 @@ CI runs coverage on every push; the lcov report is uploaded as a workflow artifa
 ## Documentation
 
 - [Configuration](docs/configuration.md) - All config options, extends, overrides
-- [Rules Reference](docs/rules.md) - All 28 rules with descriptions
+- [Rules Reference](docs/rules.md) - All 34 rules with descriptions
 - [Scoring](docs/scoring.md) - How scores are calculated
 - [Mutation Testing](docs/mutation-testing.md) - Operators and usage
 - [CI Integration](docs/ci-integration.md) - GitHub Actions, pre-commit, SARIF

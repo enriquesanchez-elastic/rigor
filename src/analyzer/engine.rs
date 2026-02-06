@@ -10,15 +10,12 @@ use std::path::{Path, PathBuf};
 use tree_sitter::Tree;
 
 use super::rules::{
-    AiSmellsRule, AnalysisRule, AssertionIntentRule, AssertionQualityRule,
-    AsyncErrorMishandlingRule, AsyncPatternsRule, BehavioralCompletenessRule,
-    BoundaryConditionsRule, BoundarySpecificityRule, CouplingAnalysisRule, DebugCodeRule,
-    ErrorCoverageRule, ExcessiveSetupRule, FlakyPatternsRule, ImplementationCouplingRule,
-    IncompleteMockVerificationRule, InputVarietyRule, MissingCleanupRule, MockAbuseRule,
-    MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule, RedundantTestRule,
-    ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule, TestComplexityRule,
-    TestIsolationRule, TrivialAssertionRule, TypeAssertionAbuseRule, UnreachableTestCodeRule,
-    VacuousTestRule,
+    AiSmellsRule, AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule,
+    BehavioralCompletenessRule, BoundaryConditionsRule, BoundarySpecificityRule,
+    CouplingAnalysisRule, DebugCodeRule, ErrorCoverageRule, FlakyPatternsRule, InputVarietyRule,
+    MockAbuseRule, MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule,
+    ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule, TestIsolationRule,
+    TrivialAssertionRule,
 };
 use super::ScoreCalculator;
 
@@ -305,16 +302,11 @@ impl AnalysisEngine {
             } else {
                 SideEffectVerificationRule::new()
             };
-        let test_complexity_rule = TestComplexityRule::new();
-        let implementation_coupling_rule = ImplementationCouplingRule::new();
-        let vacuous_test_rule = VacuousTestRule::new();
-        let incomplete_mock_rule = IncompleteMockVerificationRule::new();
-        let async_error_mishandling_rule = AsyncErrorMishandlingRule::new();
-        let redundant_test_rule = RedundantTestRule::new();
-        let unreachable_test_code_rule = UnreachableTestCodeRule::new();
-        let excessive_setup_rule = ExcessiveSetupRule::new();
-        let type_assertion_abuse_rule = TypeAssertionAbuseRule::new();
-        let missing_cleanup_rule = MissingCleanupRule::new();
+        // Phase 2.2 stub rules (test_complexity, implementation_coupling, vacuous_test,
+        // incomplete_mock_verification, async_error_mishandling, redundant_test,
+        // unreachable_test_code, excessive_setup, type_assertion_abuse, missing_cleanup)
+        // are excluded from instantiation until implemented; they currently return vec![] and
+        // would inflate scores if included.
         let ai_smells_rule = AiSmellsRule::new();
 
         let mut issues = Vec::new();
@@ -337,16 +329,6 @@ impl AnalysisEngine {
         issues.extend(return_path_rule.analyze(&tests, source, tree));
         issues.extend(behavioral_completeness_rule.analyze(&tests, source, tree));
         issues.extend(side_effect_rule.analyze(&tests, source, tree));
-        issues.extend(test_complexity_rule.analyze(&tests, source, tree));
-        issues.extend(implementation_coupling_rule.analyze(&tests, source, tree));
-        issues.extend(vacuous_test_rule.analyze(&tests, source, tree));
-        issues.extend(incomplete_mock_rule.analyze(&tests, source, tree));
-        issues.extend(async_error_mishandling_rule.analyze(&tests, source, tree));
-        issues.extend(redundant_test_rule.analyze(&tests, source, tree));
-        issues.extend(unreachable_test_code_rule.analyze(&tests, source, tree));
-        issues.extend(excessive_setup_rule.analyze(&tests, source, tree));
-        issues.extend(type_assertion_abuse_rule.analyze(&tests, source, tree));
-        issues.extend(missing_cleanup_rule.analyze(&tests, source, tree));
         issues.extend(ai_smells_rule.analyze(&tests, source, tree));
 
         if let Some(ref fc) = stats.function_coverage {

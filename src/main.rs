@@ -154,6 +154,27 @@ fn main() -> ExitCode {
     }
 }
 
+/// Attach fix metadata for fixable issues (skip when from_stdin: virtual path not on disk).
+fn attach_fix_metadata(results: &mut [rigor::AnalysisResult], from_stdin: bool) {
+    if from_stdin {
+        return;
+    }
+    for result in results.iter_mut() {
+        if let Ok(content) = std::fs::read_to_string(&result.file_path) {
+            let lines: Vec<&str> = content.lines().collect();
+            for issue in &mut result.issues {
+                if issue.fix.is_none() {
+                    let line_no = issue.location.line;
+                    let line = lines.get(line_no.saturating_sub(1)).copied().unwrap_or("");
+                    if let Some(fix) = rigor::fixer::fix_for_issue(issue, line, line_no) {
+                        issue.fix = Some(fix);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn run() -> Result<ExitCode> {
     let args = Args::parse();
 
@@ -289,14 +310,19 @@ fn run() -> Result<ExitCode> {
         };
 
         let use_parallel = args.parallel || test_files.len() > 10;
-
-        if use_parallel && !args.no_cache {
-            analyze_files_parallel_cached(&engine, &test_files, &config, &cache, args.quiet)
-        } else if use_parallel {
-            analyze_files_parallel(&engine, &test_files, &config, args.quiet)
+        let cache_opt = if args.no_cache {
+            None
         } else {
-            analyze_files_sequential_cached(&engine, &test_files, &config, &mut cache, args.quiet)
-        }
+            Some(&mut cache)
+        };
+        run_analyze_files(
+            &engine,
+            &test_files,
+            &config,
+            cache_opt,
+            use_parallel,
+            args.quiet,
+        )
     };
 
     // Save cache
@@ -311,23 +337,7 @@ fn run() -> Result<ExitCode> {
         return Ok(ExitCode::from(2));
     }
 
-    // Attach fix metadata for fixable issues (skip when --stdin: virtual path not on disk)
-    if !args.stdin {
-        for result in &mut results {
-            if let Ok(content) = std::fs::read_to_string(&result.file_path) {
-                let lines: Vec<&str> = content.lines().collect();
-                for issue in &mut result.issues {
-                    if issue.fix.is_none() {
-                        let line_no = issue.location.line;
-                        let line = lines.get(line_no.saturating_sub(1)).copied().unwrap_or("");
-                        if let Some(fix) = rigor::fixer::fix_for_issue(issue, line, line_no) {
-                            issue.fix = Some(fix);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    attach_fix_metadata(&mut results, args.stdin);
 
     if args.fix_dry_run {
         let mut count = 0;
@@ -377,7 +387,8 @@ fn run() -> Result<ExitCode> {
     // Calculate aggregate stats
     let stats = AnalysisEngine::aggregate_stats(&results);
 
-    // Load coverage data if provided (available for future enhancements)
+    // TODO: integrate coverage data into scoring once the coverage-aware rules are implemented.
+    // Currently we load and print a summary but don't use the report beyond that.
     let _coverage_report = if let Some(ref coverage_path) = args.coverage {
         match rigor::coverage::load_coverage(coverage_path) {
             Ok(report) => {
@@ -948,6 +959,51 @@ fn collect_changed_test_files(
     Ok(files)
 }
 
+/// Dispatch to the appropriate analyze path based on cache and parallelism.
+fn run_analyze_files(
+    engine: &AnalysisEngine,
+    files: &[PathBuf],
+    config: &rigor::config::Config,
+    cache: Option<&mut AnalysisCache>,
+    use_parallel: bool,
+    quiet: bool,
+) -> (Vec<rigor::AnalysisResult>, bool) {
+    match (cache, use_parallel) {
+        (Some(c), true) => analyze_files_parallel_cached(engine, files, config, c, quiet),
+        (Some(c), false) => analyze_files_sequential_cached(engine, files, config, c, quiet),
+        (None, true) => analyze_files_parallel(engine, files, config, quiet),
+        (None, false) => analyze_files_sequential(engine, files, config, quiet),
+    }
+}
+
+/// Analyze files sequentially without caching
+fn analyze_files_sequential(
+    engine: &AnalysisEngine,
+    files: &[PathBuf],
+    config: &rigor::config::Config,
+    quiet: bool,
+) -> (Vec<rigor::AnalysisResult>, bool) {
+    let mut results = Vec::new();
+    let mut had_errors = false;
+    for file in files {
+        match engine.analyze(file, Some(config)) {
+            Ok(result) => results.push(result),
+            Err(e) => {
+                if !quiet {
+                    eprintln!(
+                        "{}: Failed to analyze {}: {}",
+                        "Error".red(),
+                        file.display(),
+                        e
+                    );
+                }
+                had_errors = true;
+            }
+        }
+    }
+    (results, had_errors)
+}
+
 /// Analyze files sequentially with caching
 fn analyze_files_sequential_cached(
     engine: &AnalysisEngine,
@@ -1042,12 +1098,12 @@ fn analyze_files_parallel(
     (results, had_errors.load(Ordering::Relaxed))
 }
 
-/// Analyze files in parallel with thread-safe caching
+/// Analyze files in parallel with caching; writes to cache after collection.
 fn analyze_files_parallel_cached(
     engine: &AnalysisEngine,
     files: &[PathBuf],
     config: &rigor::config::Config,
-    cache: &AnalysisCache,
+    cache: &mut AnalysisCache,
     quiet: bool,
 ) -> (Vec<rigor::AnalysisResult>, bool) {
     use rayon::prelude::*;
@@ -1056,20 +1112,18 @@ fn analyze_files_parallel_cached(
     let had_errors = AtomicBool::new(false);
     let cache_hits = AtomicUsize::new(0);
 
-    let results: Vec<_> = files
+    // Collect (path, content, result, from_cache) so we can write cache for newly analyzed files
+    type Item = (PathBuf, String, rigor::AnalysisResult, bool);
+    let collected: Vec<Item> = files
         .par_iter()
         .filter_map(|file| {
-            // Try cache first
-            if let Ok(content) = std::fs::read_to_string(file) {
-                if let Some(cached) = cache.get(file, &content, None) {
-                    cache_hits.fetch_add(1, Ordering::Relaxed);
-                    return Some(cached);
-                }
+            let content = std::fs::read_to_string(file).ok()?;
+            if let Some(cached) = cache.get(file, &content, None) {
+                cache_hits.fetch_add(1, Ordering::Relaxed);
+                return Some((file.clone(), content, cached, false));
             }
-
-            // Analyze the file
             match engine.analyze(file, Some(config)) {
-                Ok(result) => Some(result),
+                Ok(result) => Some((file.clone(), content, result, true)),
                 Err(e) => {
                     had_errors.store(true, Ordering::Relaxed);
                     if !quiet {
@@ -1086,6 +1140,13 @@ fn analyze_files_parallel_cached(
         })
         .collect();
 
+    for (path, content, ref result, should_cache) in &collected {
+        if *should_cache {
+            cache.set(path, content, None, result.clone());
+        }
+    }
+
+    let results: Vec<rigor::AnalysisResult> = collected.into_iter().map(|(_, _, r, _)| r).collect();
     let hits = cache_hits.load(Ordering::Relaxed);
     if !quiet && hits > 0 {
         eprintln!(
