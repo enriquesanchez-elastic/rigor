@@ -121,6 +121,7 @@ impl AnalysisRule for MockAbuseRule {
                 suggestion: Some(
                     "Many mocks often indicate testing implementation; prefer integration tests or fewer mocks".to_string(),
                 ),
+                fix: None,
             });
         }
 
@@ -140,6 +141,7 @@ impl AnalysisRule for MockAbuseRule {
                         suggestion: Some(
                             "Prefer dependency injection or wrapping built-ins instead of mocking them".to_string(),
                         ),
+                        fix: None,
                     });
                     break;
                 }
@@ -221,6 +223,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 21);

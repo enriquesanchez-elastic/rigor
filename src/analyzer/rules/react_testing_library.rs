@@ -60,6 +60,7 @@ impl AnalysisRule for ReactTestingLibraryRule {
                     suggestion: Some(
                         "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -77,6 +78,7 @@ impl AnalysisRule for ReactTestingLibraryRule {
                     suggestion: Some(
                         "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -91,6 +93,7 @@ impl AnalysisRule for ReactTestingLibraryRule {
                     suggestion: Some(
                         "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }
@@ -162,6 +165,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &one_issue), 23);
     }

@@ -8,6 +8,7 @@ pub mod cache;
 pub mod config;
 pub mod coverage;
 pub mod detector;
+pub mod fixer;
 pub mod history;
 pub mod mcp;
 pub mod mutation;
@@ -29,6 +30,12 @@ pub struct AnalysisResult {
     pub score: Score,
     /// Breakdown of scores by category
     pub breakdown: ScoreBreakdown,
+    /// Full transparent breakdown (weights, penalties, traceable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transparent_breakdown: Option<TransparentBreakdown>,
+    /// Per-test scores (when available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_scores: Option<Vec<TestScore>>,
     /// List of issues found
     pub issues: Vec<Issue>,
     /// Statistics about the test file
@@ -73,20 +80,58 @@ pub struct ScoreBreakdown {
     pub test_isolation: u8,
     /// Input variety score (0-25)
     pub input_variety: u8,
+    /// AI-specific smell score (0-25)
+    #[serde(default)]
+    pub ai_smells: u8,
 }
 
 impl ScoreBreakdown {
     pub fn total(&self) -> u8 {
-        // Each category is 0-25, but we have 5 categories
-        // Normalize to 0-100 by taking weighted average
+        // Six categories 0-25 each; normalize to 0-100 (sum * 100 / 150)
         let sum = self.assertion_quality as u16
             + self.error_coverage as u16
             + self.boundary_conditions as u16
             + self.test_isolation as u16
-            + self.input_variety as u16;
-        // Each category contributes 20 points max to the final score
-        ((sum * 100) / 125).min(100) as u8
+            + self.input_variety as u16
+            + self.ai_smells as u16;
+        ((sum * 100) / 150).min(100) as u8
     }
+}
+
+/// Per-category entry for transparent score breakdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryBreakdownEntry {
+    /// Category name (e.g. "Assertion Quality")
+    pub category_name: String,
+    /// Raw score for this category (0-25)
+    pub raw_score: u8,
+    /// Maximum possible raw score (25)
+    pub max_raw: u8,
+    /// Weight percentage for this category (0-100)
+    pub weight_pct: u8,
+    /// Weighted contribution to total (before penalties)
+    pub weighted_contribution: u8,
+}
+
+/// Full transparent breakdown: category scores, weights, and penalties
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransparentBreakdown {
+    /// Per-category scores and weights
+    pub categories: Vec<CategoryBreakdownEntry>,
+    /// Score before applying issue penalties
+    pub total_before_penalties: u8,
+    /// Total penalty deducted (from issues by severity)
+    pub penalty_total: i32,
+    /// Penalty from error-severity issues
+    pub penalty_from_errors: i32,
+    /// Penalty from warning-severity issues
+    pub penalty_from_warnings: i32,
+    /// Penalty from info-severity issues
+    pub penalty_from_info: i32,
+    /// Final score after penalties (0-100)
+    pub final_score: u8,
 }
 
 /// Letter grade
@@ -137,6 +182,25 @@ pub struct Issue {
     pub location: Location,
     /// Suggested fix (if available)
     pub suggestion: Option<String>,
+    /// Auto-fix: replacement text and range (when applicable)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix: Option<Fix>,
+}
+
+/// A single auto-fix edit: replace the range with the replacement text
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Fix {
+    /// Start line (1-indexed)
+    pub start_line: usize,
+    /// Start column (1-indexed)
+    pub start_column: usize,
+    /// End line (1-indexed)
+    pub end_line: usize,
+    /// End column (1-indexed)
+    pub end_column: usize,
+    /// Replacement text
+    pub replacement: String,
 }
 
 /// Severity levels for issues
@@ -188,6 +252,77 @@ pub enum Rule {
     BehavioralCompleteness,
     /// Function has side effects but test doesn't verify them
     SideEffectNotVerified,
+    // Phase 2.2 critical rules
+    /// Test is too complex (high cyclomatic complexity or too many assertions)
+    TestComplexity,
+    /// Test is tightly coupled to implementation details
+    ImplementationCoupling,
+    /// Test is vacuous (e.g. always passes, no real verification)
+    VacuousTest,
+    /// Mock is used but not fully verified (e.g. toHaveBeenCalledWith)
+    IncompleteMockVerification,
+    /// Async error path not properly tested (rejects, catch)
+    AsyncErrorMishandling,
+    /// Redundant test (duplicates another test's coverage)
+    RedundantTest,
+    /// Unreachable code in test (after return/throw)
+    UnreachableTestCode,
+    /// Excessive setup (beforeEach/beforeAll doing too much)
+    ExcessiveSetup,
+    /// Overuse of type assertions (as Type) instead of real checks
+    TypeAssertionAbuse,
+    /// Missing cleanup (afterEach, reset mocks)
+    MissingCleanup,
+    // Phase 2.3 AI-specific smells
+    /// Tautological assertion (e.g. expect(x).toBe(x))
+    TautologicalAssertion,
+    /// Over-mocking (too many mocks, testing implementation)
+    OverMocking,
+    /// Shallow variety (narrow input range)
+    ShallowVariety,
+    /// Happy-path-only (no error/edge tests)
+    HappyPathOnly,
+    /// Parrot assertion (repeats spec wording without real check)
+    ParrotAssertion,
+    /// Boilerplate padding (generic setup, low signal)
+    BoilerplatePadding,
+}
+
+/// Scoring category name for transparent breakdown and verbose output.
+/// Returns the category name if this rule affects a category score; None if it only affects penalty.
+pub fn rule_scoring_category(rule: &Rule) -> Option<&'static str> {
+    use Rule::*;
+    match rule {
+        WeakAssertion
+        | NoAssertions
+        | TrivialAssertion
+        | AssertionIntentMismatch
+        | MutationResistant
+        | BoundarySpecificity
+        | StateVerification
+        | BehavioralCompleteness
+        | SideEffectNotVerified => Some("Assertion Quality"),
+        MissingErrorTest | ReturnPathCoverage => Some("Error Coverage"),
+        MissingBoundaryTest => Some("Boundary Conditions"),
+        SharedState => Some("Test Isolation"),
+        HardcodedValues | LimitedInputVariety | DuplicateTest => Some("Input Variety"),
+        // Phase 2.2 critical rules
+        TestComplexity | VacuousTest | RedundantTest | UnreachableTestCode | ExcessiveSetup
+        | TypeAssertionAbuse | MissingCleanup => Some("Assertion Quality"),
+        ImplementationCoupling => Some("Test Isolation"),
+        IncompleteMockVerification | AsyncErrorMishandling => Some("Error Coverage"),
+        // Phase 2.3 AI smells (dedicated category)
+        TautologicalAssertion
+        | OverMocking
+        | ShallowVariety
+        | HappyPathOnly
+        | ParrotAssertion
+        | BoilerplatePadding => Some("AI Smells"),
+        // These only affect penalty, not category score
+        DebugCode | FocusedTest | SkippedTest | EmptyTest | FlakyPattern | MockAbuse
+        | SnapshotOveruse | VagueTestName | MissingAwait | RtlPreferScreen | RtlPreferSemantic
+        | RtlPreferUserEvent => None,
+    }
 }
 
 impl std::fmt::Display for Rule {
@@ -221,6 +356,22 @@ impl std::fmt::Display for Rule {
             Rule::ReturnPathCoverage => write!(f, "return-path-coverage"),
             Rule::BehavioralCompleteness => write!(f, "behavioral-completeness"),
             Rule::SideEffectNotVerified => write!(f, "side-effect-not-verified"),
+            Rule::TestComplexity => write!(f, "test-complexity"),
+            Rule::ImplementationCoupling => write!(f, "implementation-coupling"),
+            Rule::VacuousTest => write!(f, "vacuous-test"),
+            Rule::IncompleteMockVerification => write!(f, "incomplete-mock-verification"),
+            Rule::AsyncErrorMishandling => write!(f, "async-error-mishandling"),
+            Rule::RedundantTest => write!(f, "redundant-test"),
+            Rule::UnreachableTestCode => write!(f, "unreachable-test-code"),
+            Rule::ExcessiveSetup => write!(f, "excessive-setup"),
+            Rule::TypeAssertionAbuse => write!(f, "type-assertion-abuse"),
+            Rule::MissingCleanup => write!(f, "missing-cleanup"),
+            Rule::TautologicalAssertion => write!(f, "ai-smell-tautological-assertion"),
+            Rule::OverMocking => write!(f, "ai-smell-over-mocking"),
+            Rule::ShallowVariety => write!(f, "ai-smell-shallow-variety"),
+            Rule::HappyPathOnly => write!(f, "ai-smell-happy-path-only"),
+            Rule::ParrotAssertion => write!(f, "ai-smell-parrot-assertion"),
+            Rule::BoilerplatePadding => write!(f, "ai-smell-boilerplate-padding"),
         }
     }
 }
@@ -316,56 +467,81 @@ pub struct ScoringWeights {
     pub boundary_conditions: u8,
     pub test_isolation: u8,
     pub input_variety: u8,
+    pub ai_smells: u8,
 }
 
 impl ScoringWeights {
-    /// Get default weights for a test type
+    /// Get default weights for a test type (must sum to 100)
     pub fn for_test_type(test_type: TestType) -> Self {
         match test_type {
             TestType::Unit => Self {
-                assertion_quality: 25,
-                error_coverage: 20,
-                boundary_conditions: 25,
+                assertion_quality: 20,
+                error_coverage: 15,
+                boundary_conditions: 20,
                 test_isolation: 15,
                 input_variety: 15,
+                ai_smells: 15,
             },
             TestType::E2e => Self {
-                assertion_quality: 35,
-                error_coverage: 15,
-                boundary_conditions: 5, // E2E tests don't need boundary testing
-                test_isolation: 25,
-                input_variety: 20,
-            },
-            TestType::Component => Self {
                 assertion_quality: 30,
                 error_coverage: 15,
+                boundary_conditions: 5,
+                test_isolation: 25,
+                input_variety: 20,
+                ai_smells: 5,
+            },
+            TestType::Component => Self {
+                assertion_quality: 25,
+                error_coverage: 15,
                 boundary_conditions: 15,
                 test_isolation: 20,
                 input_variety: 20,
+                ai_smells: 5,
             },
             TestType::Integration => Self {
-                assertion_quality: 25,
-                error_coverage: 20,
+                assertion_quality: 22,
+                error_coverage: 18,
                 boundary_conditions: 15,
                 test_isolation: 20,
                 input_variety: 20,
+                ai_smells: 5,
             },
         }
     }
 
     /// Calculate total score with these weights
     pub fn calculate_total(&self, breakdown: &ScoreBreakdown) -> u8 {
-        // Each category score is 0-25, we normalize by the weight
         let weighted_sum = (breakdown.assertion_quality as u32 * self.assertion_quality as u32)
             + (breakdown.error_coverage as u32 * self.error_coverage as u32)
             + (breakdown.boundary_conditions as u32 * self.boundary_conditions as u32)
             + (breakdown.test_isolation as u32 * self.test_isolation as u32)
-            + (breakdown.input_variety as u32 * self.input_variety as u32);
-
-        // Normalize: max raw = 25 * 100 = 2500, we want 0-100
-        // weighted_sum / 25 = percentage score
-        ((weighted_sum / 25) as u8).min(100)
+            + (breakdown.input_variety as u32 * self.input_variety as u32)
+            + (breakdown.ai_smells as u32 * self.ai_smells as u32);
+        (weighted_sum / 25).min(100) as u8
     }
+}
+
+/// Per-test score for drill-down and "weakest tests first" display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestScore {
+    /// Test name (e.g. from it('name', ...))
+    pub name: String,
+    /// Line range (1-indexed)
+    pub line: usize,
+    pub end_line: Option<usize>,
+    /// Score 0-100 for this test
+    pub score: u8,
+    /// Letter grade
+    pub grade: Grade,
+    /// Issues found in this test only
+    pub issues: Vec<Issue>,
+}
+
+/// Returns true if an issue's location falls within a test's line range
+pub fn issue_in_test_range(issue: &Issue, test_line: usize, test_end_line: Option<usize>) -> bool {
+    let end = test_end_line.unwrap_or(test_line);
+    (issue.location.line >= test_line) && (issue.location.line <= end)
 }
 
 /// Statistics about a test file
@@ -609,4 +785,20 @@ impl AssertionKind {
             AssertionKind::Unknown(_) => AssertionQuality::None,
         }
     }
+}
+
+/// Public API: analyze a single test file. Used by LSP and other programmatic consumers.
+///
+/// * `path` - path to the test file
+/// * `work_dir` - project root (for config lookup and source mapping)
+/// * `config_path` - optional path to .rigorrc.json; if None, searches from work_dir
+pub fn analyze_file(
+    path: &std::path::Path,
+    work_dir: &std::path::Path,
+    config_path: Option<&std::path::Path>,
+) -> anyhow::Result<AnalysisResult> {
+    let config = crate::config::load_config(work_dir, config_path).ok();
+    let engine =
+        crate::analyzer::engine::AnalysisEngine::new().with_project_root(work_dir.to_path_buf());
+    engine.analyze(path, config.as_ref())
 }

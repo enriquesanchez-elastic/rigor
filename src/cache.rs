@@ -229,7 +229,10 @@ mod tests {
                 boundary_conditions: 15,
                 test_isolation: 17,
                 input_variety: 15,
+                ai_smells: 25,
             },
+            transparent_breakdown: None,
+            test_scores: None,
             issues: vec![],
             stats: TestStats {
                 total_tests: 3,

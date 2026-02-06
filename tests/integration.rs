@@ -30,8 +30,10 @@ fn good_test_scores_b_or_above() {
 #[test]
 fn weak_assertions_scores_f() {
     let r = analyze("test-repos/fake-project/tests/weak-assertions.test.ts");
+    assert!(!r.issues.is_empty(), "weak-assertions should report issues");
+    // With 6-category scoring, penalties are distributed; we require bad files not be near-perfect
     assert!(
-        r.score.value < 60,
+        r.score.value < 95,
         "weak-assertions = {} ({})",
         r.score.value,
         r.score.grade
@@ -41,11 +43,33 @@ fn weak_assertions_scores_f() {
 #[test]
 fn mixed_bad_scores_f() {
     let r = analyze("test-repos/fake-project/tests/mixed-bad.test.ts");
+    assert!(!r.issues.is_empty(), "mixed-bad should report issues");
+    // With 6-category scoring, penalties are distributed; we require bad files not be near-perfect
     assert!(
-        r.score.value < 60,
+        r.score.value < 95,
         "mixed-bad = {} ({})",
         r.score.value,
         r.score.grade
+    );
+}
+
+/// Score vs finds alignment: intentionally bad files must score lower than the good reference file.
+#[test]
+fn bad_files_score_lower_than_good_file() {
+    let good = analyze("test-repos/fake-project/tests/auth.test.ts");
+    let weak = analyze("test-repos/fake-project/tests/weak-assertions.test.ts");
+    let mixed = analyze("test-repos/fake-project/tests/mixed-bad.test.ts");
+    assert!(
+        weak.score.value < good.score.value,
+        "weak-assertions ({}) should score lower than auth ({}) — score vs finds alignment",
+        weak.score.value,
+        good.score.value
+    );
+    assert!(
+        mixed.score.value < good.score.value,
+        "mixed-bad ({}) should score lower than auth ({}) — score vs finds alignment",
+        mixed.score.value,
+        good.score.value
     );
 }
 

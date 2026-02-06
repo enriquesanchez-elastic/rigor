@@ -193,6 +193,7 @@ impl AnalysisRule for ReturnPathCoverageRule {
                         ),
                         location,
                         suggestion: Some(Self::path_suggestion(&func)),
+                        fix: None,
                     });
                 }
             }
@@ -270,6 +271,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 20);

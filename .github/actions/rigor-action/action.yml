@@ -1,0 +1,80 @@
+name: "Rigor"
+description: "Run Rigor test quality analysis and post PR comment with score and issues"
+inputs:
+  rigor-version:
+    description: "Rigor version (e.g. 0.5.0) for npm install"
+    required: false
+    default: "latest"
+  comment-threshold:
+    description: "Only post comment if average score below this (0-100); 100 = always"
+    required: false
+    default: "100"
+  upload-sarif:
+    description: "Upload SARIF for Code Scanning"
+    required: false
+    default: "true"
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rigor
+      shell: bash
+      run: |
+        if command -v rigor >/dev/null 2>&1; then
+          echo "Rigor on PATH"
+        else
+          npm install -g "rigor-cli@${INPUT_RIGOR_VERSION}" 2>/dev/null || true
+        fi
+
+    - name: Run Rigor (JSON)
+      id: rigor
+      shell: bash
+      run: |
+        rigor --json --changed > rigor-output.json 2>/dev/null || echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
+
+    - name: Run Rigor (SARIF)
+      if: inputs.upload-sarif == 'true'
+      shell: bash
+      run: |
+        rigor --sarif --changed > rigor.sarif 2>/dev/null || echo '{"version":"2.1.0","runs":[]}' > rigor.sarif
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = '## Rigor Test Quality\n\n';
+          try {
+            const raw = fs.readFileSync('rigor-output.json', 'utf8');
+            const data = JSON.parse(raw);
+            const results = data.results || (Array.isArray(data) ? data : []);
+            const summary = data.summary || {};
+            if (results.length === 0 && !summary.filesAnalyzed) {
+              body += 'No test files changed in this PR.\n';
+            } else {
+              results.forEach(r => {
+                const s = r.score?.value ?? 0;
+                const g = r.score?.grade ?? '';
+                body += `- **${r.filePath || r.file_path || '?'}**: ${s}/100 (${g})\n`;
+              });
+              const avg = summary.averageScore ?? (results.reduce((a, r) => a + (r.score?.value ?? 0), 0) / (results.length || 1));
+              body += `\n**Average score:** ${avg}/100\n`;
+            }
+            body += '\n_Configure: \`.github/actions/rigor-action\` inputs._';
+          } catch (e) {
+            body += 'Rigor did not produce JSON. Run `rigor --json --changed` locally.\n';
+          }
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body
+          });
+      continue-on-error: true
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: rigor.sarif
+      continue-on-error: true

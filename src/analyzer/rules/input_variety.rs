@@ -432,6 +432,7 @@ impl AnalysisRule for InputVarietyRule {
                     "Add test cases with value 0. {}",
                     diversity.suggest_missing_edge_cases()
                 )),
+                fix: None,
             });
         }
 
@@ -446,6 +447,7 @@ impl AnalysisRule for InputVarietyRule {
                 ),
                 location: Location::new(1, 1),
                 suggestion: Some("Add test cases with negative numbers like -1".to_string()),
+                fix: None,
             });
         }
 
@@ -461,6 +463,7 @@ impl AnalysisRule for InputVarietyRule {
                 ),
                 location: Location::new(1, 1),
                 suggestion: Some("Add test cases with empty string ''".to_string()),
+                fix: None,
             });
         }
 
@@ -471,6 +474,7 @@ impl AnalysisRule for InputVarietyRule {
                 message: "Tests don't include null value testing".to_string(),
                 location: Location::new(1, 1),
                 suggestion: Some("Consider adding test cases with null values".to_string()),
+                fix: None,
             });
         }
 
@@ -498,6 +502,7 @@ impl AnalysisRule for InputVarietyRule {
                             "Consider using test fixtures or faker library for test data"
                                 .to_string(),
                         ),
+                        fix: None,
                     });
                 }
             }
@@ -528,6 +533,7 @@ impl AnalysisRule for InputVarietyRule {
                     "Vary test input values. Consider adding: {}",
                     missing.join(", ")
                 )),
+                fix: None,
             });
         }
 
@@ -550,6 +556,7 @@ impl AnalysisRule for InputVarietyRule {
                 message: format!("All tests use the same string value: {}", value),
                 location: Location::new(1, 1),
                 suggestion: Some("Vary test input strings. Consider adding: '', special characters, long strings".to_string()),
+                fix: None,
             });
         }
 

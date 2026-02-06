@@ -150,6 +150,7 @@ impl BoundaryConditionsRule {
                     suggestion: Some(
                         "Add boundary tests from source (e.g. expect(fn(threshold)).toBe(expected)). Consider testing min, max, and edge values.".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }
@@ -209,6 +210,7 @@ impl AnalysisRule for BoundaryConditionsRule {
                                 "Add tests: expect({}({})).toBe(expected); expect({}({})).toBe(expected); expect({}({})).toBe(expected)",
                                 fn_placeholder, v_lo, fn_placeholder, v, fn_placeholder, v_hi
                             )),
+                            fix: None,
                         });
                     }
                 }
@@ -246,6 +248,7 @@ impl AnalysisRule for BoundaryConditionsRule {
                 suggestion: Some(
                     "Add tests: expect(fn(0)).toBe(...); expect(fn('')).toBe(...); expect(fn(null)).toThrow()".to_string(),
                 ),
+                fix: None,
             });
         }
 

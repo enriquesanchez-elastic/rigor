@@ -1,0 +1,40 @@
+{
+  "name": "rigor",
+  "displayName": "Rigor",
+  "description": "Test quality analysis for TypeScript - inline diagnostics from Rigor",
+  "version": "1.0.0",
+  "publisher": "rigor",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Linters", "Testing"],
+  "activationEvents": ["onLanguage:typescript", "onLanguage:javascript"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Rigor",
+      "properties": {
+        "rigor.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Rigor test quality diagnostics on save"
+        },
+        "rigor.path": {
+          "type": "string",
+          "default": "rigor-lsp",
+          "description": "Path to rigor-lsp binary (or full path)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

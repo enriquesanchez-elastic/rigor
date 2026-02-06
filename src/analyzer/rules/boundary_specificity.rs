@@ -65,6 +65,7 @@ impl AnalysisRule for BoundarySpecificityRule {
                     suggestion: Some(
                         "Assert exact boundary: e.g. expect(fn(17)).toBe(false); expect(fn(18)).toBe(true)".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }

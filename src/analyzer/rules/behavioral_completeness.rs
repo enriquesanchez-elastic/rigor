@@ -196,6 +196,7 @@ impl AnalysisRule for BehavioralCompletenessRule {
                         ),
                         location: location.clone(),
                         suggestion: Some(suggestion),
+                        fix: None,
                     });
                 } else if ratio < 1.0 {
                     issues.push(Issue {
@@ -210,6 +211,7 @@ impl AnalysisRule for BehavioralCompletenessRule {
                         ),
                         location,
                         suggestion: Some(format!("Consider verifying: {}", missing.join(", "))),
+                        fix: None,
                     });
                 }
             }
@@ -314,6 +316,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 21);

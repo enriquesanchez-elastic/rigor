@@ -20,6 +20,22 @@ struct SarifLog {
 struct SarifRun {
     tool: SarifTool,
     results: Vec<SarifResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    properties: Option<SarifRunProperties>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SarifRunProperties {
+    #[serde(rename = "rigor/breakdowns")]
+    rigor_breakdowns: Vec<SerdeBreakdownPerFile>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SerdeBreakdownPerFile {
+    file_path: String,
+    breakdown: crate::TransparentBreakdown,
 }
 
 #[derive(Serialize)]
@@ -172,6 +188,24 @@ impl SarifReporter {
             }
         }
 
+        let rigor_breakdowns: Vec<SerdeBreakdownPerFile> = results
+            .iter()
+            .filter_map(|r| {
+                r.transparent_breakdown
+                    .as_ref()
+                    .map(|tb| SerdeBreakdownPerFile {
+                        file_path: r.file_path.to_string_lossy().to_string(),
+                        breakdown: tb.clone(),
+                    })
+            })
+            .collect();
+
+        let properties = if rigor_breakdowns.is_empty() {
+            None
+        } else {
+            Some(SarifRunProperties { rigor_breakdowns })
+        };
+
         let run = SarifRun {
             tool: SarifTool {
                 driver: SarifDriver {
@@ -182,6 +216,7 @@ impl SarifReporter {
                 },
             },
             results: sarif_results,
+            properties,
         };
 
         let log = SarifLog {
@@ -219,7 +254,10 @@ mod tests {
                 boundary_conditions: 10,
                 test_isolation: 20,
                 input_variety: 15,
+                ai_smells: 25,
             },
+            transparent_breakdown: None,
+            test_scores: None,
             issues,
             stats: TestStats {
                 total_tests: 5,
@@ -286,6 +324,7 @@ mod tests {
                 message: "Using toBeTruthy instead of toBe".to_string(),
                 location: Location::new(10, 5).with_end(10, 30),
                 suggestion: Some("Use toBe(true) instead".to_string()),
+                fix: None,
             },
             Issue {
                 rule: Rule::NoAssertions,
@@ -293,6 +332,7 @@ mod tests {
                 message: "Test has no assertions".to_string(),
                 location: Location::new(25, 3),
                 suggestion: None,
+                fix: None,
             },
         ];
 
@@ -330,6 +370,7 @@ mod tests {
                 message: "err".to_string(),
                 location: Location::new(1, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: Rule::WeakAssertion,
@@ -337,6 +378,7 @@ mod tests {
                 message: "warn".to_string(),
                 location: Location::new(2, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: Rule::HardcodedValues,
@@ -344,6 +386,7 @@ mod tests {
                 message: "info".to_string(),
                 location: Location::new(3, 1),
                 suggestion: None,
+                fix: None,
             },
         ];
 
@@ -372,6 +415,7 @@ mod tests {
                 message: "weak".to_string(),
                 location: Location::new(1, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: Rule::MissingErrorTest,
@@ -379,6 +423,7 @@ mod tests {
                 message: "missing err".to_string(),
                 location: Location::new(2, 1),
                 suggestion: None,
+                fix: None,
             },
         ];
 
@@ -407,6 +452,7 @@ mod tests {
             message: "console.log found".to_string(),
             location: Location::new(42, 8).with_end(42, 25),
             suggestion: None,
+            fix: None,
         };
 
         let reporter = SarifReporter::new();
@@ -447,6 +493,7 @@ mod tests {
             message: "w1".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }]);
         let mut r2 = make_result_with_issues(vec![Issue {
             rule: Rule::NoAssertions,
@@ -454,6 +501,7 @@ mod tests {
             message: "e1".to_string(),
             location: Location::new(5, 1),
             suggestion: None,
+            fix: None,
         }]);
         r2.file_path = PathBuf::from("/src/tests/cart.test.ts");
 

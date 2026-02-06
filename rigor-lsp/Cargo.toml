@@ -1,0 +1,16 @@
+[package]
+name = "rigor-lsp"
+version = "1.0.0"
+edition = "2021"
+description = "LSP server for Rigor test quality analyzer"
+
+[dependencies]
+rigor = { path = ".." }
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+log = "0.4"
+
+[[bin]]
+name = "rigor-lsp"
+path = "src/main.rs"

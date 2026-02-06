@@ -1,0 +1,19 @@
+# Optional: run Rigor on PRs and comment with test quality summary.
+# Add this workflow or the rigor-action step to your PR workflow.
+name: Rigor PR
+on:
+  pull_request:
+    paths: ['**.test.ts', '**.test.tsx', '**.spec.ts', '**.spec.tsx', '**.cy.ts', '**.cy.tsx']
+jobs:
+  rigor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: ./.github/actions/rigor-action
+        with:
+          upload-sarif: 'true'

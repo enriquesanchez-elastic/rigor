@@ -72,6 +72,7 @@ impl AnalysisRule for StateVerificationRule {
                     suggestion: Some(
                         "Verify state or mocks: expect(mockFn).toHaveBeenCalledWith(expected); or expect(state).toEqual(expected)".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }

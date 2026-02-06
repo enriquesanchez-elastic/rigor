@@ -55,6 +55,7 @@ impl AnalysisRule for AsyncPatternsRule {
                     suggestion: Some(
                         "Prefer: await expect(asyncFn()).resolves.toBe(value) or await expect(promise).rejects.toThrow()".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }
@@ -93,6 +94,7 @@ impl AnalysisRule for AsyncPatternsRule {
                             "Ensure async operations are awaited to avoid race conditions"
                                 .to_string(),
                         ),
+                        fix: None,
                     });
                 }
             }
@@ -157,6 +159,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 22);

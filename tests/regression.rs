@@ -34,163 +34,163 @@ macro_rules! regression {
     };
 }
 
-// tests/
+// tests/ (baselines updated for 6-category scoring including AI Smells)
 regression!(
     assertion_intent_mismatch,
     "test-repos/fake-project/tests/assertion-intent-mismatch.test.ts",
-    54,
-    15
+    91,
+    16
 );
 regression!(
     async_missing_await,
     "test-repos/fake-project/tests/async-missing-await.test.ts",
-    83,
+    96,
     7
 );
-regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 85, 9);
-regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 78, 7);
+regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 96, 9);
+regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 95, 7);
 regression!(
     debug_code,
     "test-repos/fake-project/tests/debug-code.test.ts",
-    65,
-    13
+    93,
+    18
 );
 regression!(
     duplicate_names,
     "test-repos/fake-project/tests/duplicate-names.test.ts",
-    74,
+    94,
     4
 );
-regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 63, 22);
+regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 93, 23);
 regression!(
     hardcoded_limited_input,
     "test-repos/fake-project/tests/hardcoded-limited-input.test.ts",
-    81,
-    13
+    97,
+    14
 );
 regression!(
     missing_boundary_tests,
     "test-repos/fake-project/tests/missing-boundary-tests.test.ts",
-    89,
+    96,
     3
 );
 regression!(
     missing_error_tests,
     "test-repos/fake-project/tests/missing-error-tests.test.ts",
-    87,
+    97,
     6
 );
 regression!(
     mixed_bad,
     "test-repos/fake-project/tests/mixed-bad.test.ts",
-    55,
-    14
+    92,
+    18
 );
 regression!(
     mock_abuse,
     "test-repos/fake-project/tests/mock-abuse.test.ts",
-    88,
-    7
+    97,
+    8
 );
 regression!(
     mutation_resistant,
     "test-repos/fake-project/tests/mutation-resistant.test.ts",
-    87,
-    6
+    98,
+    7
 );
 regression!(
     no_assertions,
     "test-repos/fake-project/tests/no-assertions.test.ts",
-    40,
-    10
+    89,
+    11
 );
 regression!(
     shared_state,
     "test-repos/fake-project/tests/shared-state.test.ts",
-    85,
+    99,
     5
 );
 regression!(
     skipped_and_focused,
     "test-repos/fake-project/tests/skipped-and-focused.test.ts",
-    53,
-    17
+    91,
+    23
 );
 regression!(
     snapshot_only,
     "test-repos/fake-project/tests/snapshot-only.test.ts",
-    38,
-    20
+    85,
+    21
 );
 regression!(
     trivial_assertions,
     "test-repos/fake-project/tests/trivial-assertions.test.ts",
-    49,
-    17
+    90,
+    21
 );
 regression!(
     vague_names,
     "test-repos/fake-project/tests/vague-names.test.ts",
-    62,
-    12
+    94,
+    16
 );
 regression!(
     weak_assertions,
     "test-repos/fake-project/tests/weak-assertions.test.ts",
-    54,
-    15
+    93,
+    16
 );
 
 // e2e/
 regression!(
     checkout_cy,
     "test-repos/fake-project/e2e/checkout.cy.ts",
-    74,
+    90,
     8
 );
 regression!(
     flaky_playwright,
     "test-repos/fake-project/e2e/flaky-playwright.e2e.test.ts",
-    85,
+    96,
     10
 );
 regression!(
     login_e2e,
     "test-repos/fake-project/e2e/login.e2e.test.ts",
-    82,
+    95,
     9
 );
 regression!(
     weak_cypress,
     "test-repos/fake-project/e2e/weak-cypress.cy.ts",
-    76,
-    8
+    95,
+    9
 );
 
 // vitest/
 regression!(
     vitest_math,
     "test-repos/fake-project/vitest/math.test.ts",
-    91,
-    3
+    100,
+    4
 );
 
 // src/
 regression!(
     button_test,
     "test-repos/fake-project/src/components/Button.test.tsx",
-    83,
+    98,
     9
 );
 regression!(
     button_bad_test,
     "test-repos/fake-project/src/components/Button.bad.test.tsx",
-    81,
-    10
+    97,
+    11
 );
 regression!(
     validators_test,
     "test-repos/fake-project/src/__tests__/validators.test.ts",
-    47,
+    84,
     14
 );

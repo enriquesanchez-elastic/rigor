@@ -2,7 +2,7 @@
 
 use crate::analyzer::engine::AggregateStats;
 use crate::analyzer::scoring::ScoreCalculator;
-use crate::{AnalysisResult, Grade, Issue, Severity};
+use crate::{rule_scoring_category, AnalysisResult, Grade, Issue, Severity, TestScore};
 use colored::Colorize;
 
 /// Reporter for terminal output
@@ -39,6 +39,10 @@ impl ConsoleReporter {
         self.print_header(result);
         self.print_score(result);
         self.print_breakdown(result);
+
+        if let Some(ref test_scores) = result.test_scores {
+            self.print_test_scores_weakest_first(test_scores);
+        }
 
         if !result.issues.is_empty() {
             self.print_issues(result);
@@ -100,25 +104,76 @@ impl ConsoleReporter {
     fn print_breakdown(&self, result: &AnalysisResult) {
         println!("   {}", "Score Breakdown:".bold());
 
-        let categories = [
-            ("Assertion Quality", result.breakdown.assertion_quality),
-            ("Error Coverage", result.breakdown.error_coverage),
-            ("Boundary Conditions", result.breakdown.boundary_conditions),
-            ("Test Isolation", result.breakdown.test_isolation),
-            ("Input Variety", result.breakdown.input_variety),
-        ];
+        if let Some(ref tb) = result.transparent_breakdown {
+            for cat in &tb.categories {
+                let bar = self.create_mini_bar(cat.raw_score, cat.max_raw);
+                let score_str = format!("{:>2}/{}", cat.raw_score, cat.max_raw);
+                let colored_score = if cat.raw_score >= 20 {
+                    score_str.green()
+                } else if cat.raw_score >= 15 {
+                    score_str.yellow()
+                } else {
+                    score_str.red()
+                };
+                println!(
+                    "   {} {} {} (weight {}%, contributes {})",
+                    bar,
+                    colored_score,
+                    cat.category_name,
+                    cat.weight_pct,
+                    cat.weighted_contribution
+                );
+            }
+            println!(
+                "   {} before penalties, −{} penalty → {}",
+                tb.total_before_penalties.to_string().dimmed(),
+                tb.penalty_total.to_string().dimmed(),
+                tb.final_score.to_string().bold()
+            );
+        } else {
+            let categories = [
+                ("Assertion Quality", result.breakdown.assertion_quality),
+                ("Error Coverage", result.breakdown.error_coverage),
+                ("Boundary Conditions", result.breakdown.boundary_conditions),
+                ("Test Isolation", result.breakdown.test_isolation),
+                ("Input Variety", result.breakdown.input_variety),
+            ];
+            for (name, score) in categories {
+                let bar = self.create_mini_bar(score, 25);
+                let score_str = format!("{:>2}/25", score);
+                let colored_score = if score >= 20 {
+                    score_str.green()
+                } else if score >= 15 {
+                    score_str.yellow()
+                } else {
+                    score_str.red()
+                };
+                println!("   {} {} {}", bar, colored_score, name);
+            }
+        }
+        println!();
+    }
 
-        for (name, score) in categories {
-            let bar = self.create_mini_bar(score, 25);
-            let score_str = format!("{:>2}/25", score);
-            let colored_score = if score >= 20 {
-                score_str.green()
-            } else if score >= 15 {
-                score_str.yellow()
-            } else {
-                score_str.red()
-            };
-            println!("   {} {} {}", bar, colored_score, name);
+    fn print_test_scores_weakest_first(&self, test_scores: &[TestScore]) {
+        if test_scores.is_empty() {
+            return;
+        }
+        println!("   {}", "Per-test scores (weakest first):".bold());
+        let mut sorted: Vec<&TestScore> = test_scores.iter().collect();
+        sorted.sort_by(|a, b| a.score.cmp(&b.score).then_with(|| a.line.cmp(&b.line)));
+        for ts in sorted {
+            let grade_str = self.colorize_grade(&ts.grade);
+            let line_info = ts
+                .end_line
+                .map(|e| format!("L{}-{}", ts.line, e))
+                .unwrap_or_else(|| format!("L{}", ts.line));
+            println!(
+                "   {} {} {} {}",
+                line_info.dimmed(),
+                grade_str,
+                ts.score,
+                ts.name
+            );
         }
         println!();
     }
@@ -181,6 +236,14 @@ impl ConsoleReporter {
             issue.rule.to_string().dimmed(),
             issue.message
         );
+
+        if self.verbose {
+            let category_note = match rule_scoring_category(&issue.rule) {
+                Some(cat) => format!("affects category: {}", cat),
+                None => "affects penalty only".to_string(),
+            };
+            println!("       {} {}", "↳".dimmed(), category_note.dimmed());
+        }
 
         if let Some(ref suggestion) = issue.suggestion {
             let arrow = "→".dimmed();

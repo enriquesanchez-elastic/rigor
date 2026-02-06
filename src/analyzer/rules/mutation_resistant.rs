@@ -81,6 +81,7 @@ impl AnalysisRule for MutationResistantRule {
                         ),
                         location: assertion.location.clone(),
                         suggestion: Some(suggestion),
+                        fix: None,
                     });
                 }
             }
