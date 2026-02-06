@@ -83,9 +83,9 @@ impl QueryCache {
         query_id: QueryId,
     ) -> Result<Vec<Vec<QueryCaptureInfo>>, tree_sitter::QueryError> {
         let mut guard = self.ts.lock().expect("query cache lock");
-        if !guard.contains_key(&query_id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = guard.entry(query_id) {
             let q = Self::compile(lang, query_id)?;
-            guard.insert(query_id, q);
+            e.insert(q);
         }
         let query = guard.get(&query_id).unwrap();
         let mut cursor = QueryCursor::new();

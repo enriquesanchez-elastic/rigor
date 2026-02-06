@@ -98,6 +98,7 @@ impl ScoreCalculator {
     }
 
     /// Calculate breakdown from tests and issues
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_breakdown(
         tests: &[TestCase],
         issues: &[Issue],

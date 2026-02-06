@@ -226,6 +226,7 @@ impl AnalysisEngine {
     }
 
     /// Shared analysis core (path-based analyze reads file and optionally source; analyze_source passes None for source).
+    #[allow(clippy::too_many_arguments)]
     fn analyze_core(
         &self,
         source: &str,
@@ -260,16 +261,16 @@ impl AnalysisEngine {
 
         let assertion_rule = AssertionQualityRule::new();
         let error_rule =
-            if let (Some(ref content), Some(ref st)) = (source_content_ref, source_tree_ref) {
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
                 ErrorCoverageRule::new()
-                    .with_source(content.to_string(), (*st).clone())
+                    .with_source(content.to_string(), st.clone())
                     .with_test_type(test_type)
             } else {
                 ErrorCoverageRule::new().with_test_type(test_type)
             };
         let boundary_rule =
-            if let (Some(ref content), Some(ref st)) = (source_content_ref, source_tree_ref) {
-                BoundaryConditionsRule::new().with_source(content.to_string(), (*st).clone())
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                BoundaryConditionsRule::new().with_source(content.to_string(), st.clone())
             } else {
                 BoundaryConditionsRule::new()
             };
@@ -287,20 +288,20 @@ impl AnalysisEngine {
         let assertion_intent_rule = AssertionIntentRule::new();
         let trivial_assertion_rule = TrivialAssertionRule::new();
         let return_path_rule =
-            if let (Some(ref content), Some(ref st)) = (source_content_ref, source_tree_ref) {
-                ReturnPathCoverageRule::new().with_source(content.to_string(), (*st).clone())
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                ReturnPathCoverageRule::new().with_source(content.to_string(), st.clone())
             } else {
                 ReturnPathCoverageRule::new()
             };
         let behavioral_completeness_rule =
-            if let (Some(ref content), Some(ref st)) = (source_content_ref, source_tree_ref) {
-                BehavioralCompletenessRule::new().with_source(content.to_string(), (*st).clone())
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                BehavioralCompletenessRule::new().with_source(content.to_string(), st.clone())
             } else {
                 BehavioralCompletenessRule::new()
             };
         let side_effect_rule =
-            if let (Some(ref content), Some(ref st)) = (source_content_ref, source_tree_ref) {
-                SideEffectVerificationRule::new().with_source(content.to_string(), (*st).clone())
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                SideEffectVerificationRule::new().with_source(content.to_string(), st.clone())
             } else {
                 SideEffectVerificationRule::new()
             };
@@ -396,7 +397,7 @@ impl AnalysisEngine {
                     .cloned()
                     .collect();
                 let breakdown_t = ScoreCalculator::calculate_breakdown(
-                    &[test.clone()],
+                    std::slice::from_ref(test),
                     &issues_for_test,
                     &assertion_rule,
                     &error_rule,

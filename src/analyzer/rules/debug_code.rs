@@ -201,22 +201,21 @@ impl AnalysisRule for DebugCodeRule {
         for (zero_indexed, line) in source.lines().enumerate() {
             let line_no = zero_indexed + 1;
             let trimmed = line.trim();
-            if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
-                if (trimmed.contains("it(") || trimmed.contains("test("))
-                    && (trimmed.contains("// it(") || trimmed.contains("// test("))
-                    && !trimmed.contains("rigor-ignore")
-                {
-                    issues.push(Issue {
-                        rule: Rule::DebugCode,
-                        severity: Severity::Info,
-                        message: "Commented-out test code - remove or restore the test".to_string(),
-                        location: Location::new(line_no, 1),
-                        suggestion: Some(
-                            "Delete commented code or uncomment to run the test".to_string(),
-                        ),
-                        fix: None,
-                    });
-                }
+            if (trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*'))
+                && (trimmed.contains("it(") || trimmed.contains("test("))
+                && (trimmed.contains("// it(") || trimmed.contains("// test("))
+                && !trimmed.contains("rigor-ignore")
+            {
+                issues.push(Issue {
+                    rule: Rule::DebugCode,
+                    severity: Severity::Info,
+                    message: "Commented-out test code - remove or restore the test".to_string(),
+                    location: Location::new(line_no, 1),
+                    suggestion: Some(
+                        "Delete commented code or uncomment to run the test".to_string(),
+                    ),
+                    fix: None,
+                });
             }
         }
 
