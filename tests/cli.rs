@@ -22,8 +22,9 @@ fn no_args_returns_error_not_panic() {
 
 #[test]
 fn below_threshold_exit_1() {
+    // weak-assertions.test.ts scores 93 (6-category baseline); threshold above that → exit 1
     let mut cmd = rigor_cmd();
-    cmd.arg(WEAK_TEST).arg("--threshold").arg("90");
+    cmd.arg(WEAK_TEST).arg("--threshold").arg("95");
     cmd.assert().failure().code(1);
 }
 
@@ -90,18 +91,17 @@ fn subcommand_init_no_panic() {
 
 #[test]
 fn threshold_at_exact_boundary() {
-    // auth.test.ts scores 83 (from regression baseline)
-    // Threshold at exactly 83 should pass (score >= threshold)
+    // auth.test.ts scores 96 (from regression baseline); threshold at or below should pass
     let mut cmd = rigor_cmd();
-    cmd.arg(AUTH_TEST).arg("--threshold").arg("83");
+    cmd.arg(AUTH_TEST).arg("--threshold").arg("96");
     cmd.assert().success();
 }
 
 #[test]
 fn threshold_one_above_score_fails() {
-    // auth.test.ts scores 85; threshold 86 should fail
+    // auth.test.ts scores 96; threshold 97 (one above) should fail
     let mut cmd = rigor_cmd();
-    cmd.arg(AUTH_TEST).arg("--threshold").arg("86");
+    cmd.arg(AUTH_TEST).arg("--threshold").arg("97");
     cmd.assert().failure().code(1);
 }
 

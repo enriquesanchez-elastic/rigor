@@ -106,7 +106,10 @@ mod tests {
                 boundary_conditions: 15,
                 test_isolation: 17,
                 input_variety: 15,
+                ai_smells: 25,
             },
+            transparent_breakdown: None,
+            test_scores: None,
             issues: vec![],
             stats: TestStats {
                 total_tests: 3,
@@ -139,6 +142,7 @@ mod tests {
             message: "Weak assertion".to_string(),
             location: Location::new(5, 1),
             suggestion: Some("Use toBe()".to_string()),
+            fix: None,
         });
 
         let reporter = JsonReporter::new();

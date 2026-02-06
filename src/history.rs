@@ -128,7 +128,10 @@ mod tests {
                 boundary_conditions: 15,
                 test_isolation: 17,
                 input_variety: 15,
+                ai_smells: 25,
             },
+            transparent_breakdown: None,
+            test_scores: None,
             issues: (0..issue_count)
                 .map(|_| crate::Issue {
                     rule: crate::Rule::WeakAssertion,
@@ -136,6 +139,7 @@ mod tests {
                     message: "test".to_string(),
                     location: crate::Location::new(1, 1),
                     suggestion: None,
+                    fix: None,
                 })
                 .collect(),
             stats: TestStats::default(),

@@ -132,6 +132,7 @@ impl AnalysisRule for FlakyPatternsRule {
                         .to_string(),
                     location: Location::new(line_no, col),
                     suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
+                    fix: None,
                 });
             }
 
@@ -147,6 +148,7 @@ impl AnalysisRule for FlakyPatternsRule {
                         .to_string(),
                     location: Location::new(line_no, col),
                     suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
+                    fix: None,
                 });
             }
 
@@ -160,6 +162,7 @@ impl AnalysisRule for FlakyPatternsRule {
                         .to_string(),
                     location: Location::new(line_no, col),
                     suggestion: Some(self.random_mock_suggestion()),
+                    fix: None,
                 });
             }
 
@@ -182,6 +185,7 @@ impl AnalysisRule for FlakyPatternsRule {
                             .to_string(),
                         location: Location::new(line_no, col),
                         suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Advance)),
+                        fix: None,
                     });
                 }
             }
@@ -213,6 +217,7 @@ impl AnalysisRule for FlakyPatternsRule {
                         suggestion: Some(
                             "Mock fetch/axios with jest.mock() or MSW for unit tests".to_string(),
                         ),
+                        fix: None,
                     });
                 }
             }
@@ -319,6 +324,7 @@ mod tests {
             message: "test".to_string(),
             location: Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 21);

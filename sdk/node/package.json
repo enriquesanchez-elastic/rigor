@@ -1,0 +1,13 @@
+{
+  "name": "@rigor/sdk",
+  "version": "1.0.0",
+  "description": "Node.js SDK for Rigor test quality analysis (programmatic API)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": ["rigor", "test-quality", "typescript", "testing"],
+  "license": "MIT",
+  "engines": { "node": ">=16" }
+}

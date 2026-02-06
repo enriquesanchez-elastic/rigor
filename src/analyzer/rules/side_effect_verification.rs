@@ -168,6 +168,7 @@ impl AnalysisRule for SideEffectVerificationRule {
                     ),
                     location,
                     suggestion: Some(suggestion),
+                    fix: None,
                 });
             }
         }
@@ -250,6 +251,7 @@ mod tests {
             message: "test".to_string(),
             location: crate::Location::new(1, 1),
             suggestion: None,
+            fix: None,
         }];
         assert_eq!(rule.calculate_score(&tests, &zero_issues), 25);
         assert_eq!(rule.calculate_score(&tests, &one_issue), 20);

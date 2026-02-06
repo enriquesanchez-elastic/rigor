@@ -162,6 +162,7 @@ impl AnalysisRule for TestIsolationRule {
                         "Add beforeEach hook to reset shared state, or use const instead"
                             .to_string(),
                     ),
+                    fix: None,
                 });
             }
         }
@@ -178,6 +179,7 @@ impl AnalysisRule for TestIsolationRule {
                 ),
                 location: tests[i].location.clone(),
                 suggestion: Some("Ensure each test can run independently in any order".to_string()),
+                fix: None,
             });
         }
 
@@ -195,6 +197,7 @@ impl AnalysisRule for TestIsolationRule {
                         "Rename one of the tests (lines {} and {})",
                         tests[prev_idx].location.line, test.location.line
                     )),
+                    fix: None,
                 });
             } else {
                 seen_names.insert(&test.name, i);

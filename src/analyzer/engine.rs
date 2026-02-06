@@ -3,18 +3,22 @@
 use crate::config::{Config, RuleSeverity, SourceMappingMode};
 use crate::detector::{FrameworkDetector, SourceMapper};
 use crate::parser::{IgnoreDirectives, SourceFileParser, TestFileParser, TypeScriptParser};
-use crate::{AnalysisResult, Issue, Score};
+use crate::{issue_in_test_range, AnalysisResult, Issue, Score, TestScore};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tree_sitter::Tree;
 
 use super::rules::{
-    AnalysisRule, AssertionIntentRule, AssertionQualityRule, AsyncPatternsRule,
-    BehavioralCompletenessRule, BoundaryConditionsRule, BoundarySpecificityRule,
-    CouplingAnalysisRule, DebugCodeRule, ErrorCoverageRule, FlakyPatternsRule, InputVarietyRule,
-    MockAbuseRule, MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule,
-    ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule, TestIsolationRule,
-    TrivialAssertionRule,
+    AiSmellsRule, AnalysisRule, AssertionIntentRule, AssertionQualityRule,
+    AsyncErrorMishandlingRule, AsyncPatternsRule, BehavioralCompletenessRule,
+    BoundaryConditionsRule, BoundarySpecificityRule, CouplingAnalysisRule, DebugCodeRule,
+    ErrorCoverageRule, ExcessiveSetupRule, FlakyPatternsRule, ImplementationCouplingRule,
+    IncompleteMockVerificationRule, InputVarietyRule, MissingCleanupRule, MockAbuseRule,
+    MutationResistantRule, NamingQualityRule, ReactTestingLibraryRule, RedundantTestRule,
+    ReturnPathCoverageRule, SideEffectVerificationRule, StateVerificationRule, TestComplexityRule,
+    TestIsolationRule, TrivialAssertionRule, TypeAssertionAbuseRule, UnreachableTestCodeRule,
+    VacuousTestRule,
 };
 use super::ScoreCalculator;
 
@@ -164,26 +168,109 @@ impl AnalysisEngine {
             (None, None)
         };
 
-        // Calculate function coverage if source is available
-        if let (Some(ref src_content), Some(ref src_tree)) = (&source_content, &source_tree) {
+        self.analyze_core(
+            &source,
+            &tree,
+            tests,
+            &mut stats,
+            framework,
+            test_type,
+            test_path,
+            config,
+            source_file,
+            source_content,
+            source_tree,
+        )
+    }
+
+    /// Analyze test source from a string (e.g. stdin or in-memory content).
+    /// Use a virtual path (e.g. `Path::new("stdin.test.ts")`) for config and test-type detection.
+    /// Source file mapping is not performed; source-dependent rules run without source context.
+    pub fn analyze_source(
+        &self,
+        test_source: &str,
+        virtual_path: &Path,
+        config: Option<&Config>,
+    ) -> Result<AnalysisResult> {
+        let mut parser = TypeScriptParser::for_file(virtual_path)
+            .with_context(|| format!("Failed to create parser for {}", virtual_path.display()))?;
+        let tree = parser.parse(test_source).with_context(|| {
+            format!("Failed to parse test source for {}", virtual_path.display())
+        })?;
+
+        let test_parser = TestFileParser::new(test_source);
+        let tests = test_parser.extract_tests(&tree);
+        let mut stats = test_parser.extract_stats(&tree);
+
+        let framework_detector = FrameworkDetector::new(test_source);
+        let framework = framework_detector.detect(&tree);
+        let test_type = framework_detector.detect_test_type(virtual_path, framework);
+
+        let source_file: Option<PathBuf> = None;
+        let source_content: Option<String> = None;
+        let source_tree: Option<Tree> = None;
+
+        self.analyze_core(
+            test_source,
+            &tree,
+            tests,
+            &mut stats,
+            framework,
+            test_type,
+            virtual_path,
+            config,
+            source_file,
+            source_content,
+            source_tree,
+        )
+    }
+
+    /// Shared analysis core (path-based analyze reads file and optionally source; analyze_source passes None for source).
+    #[allow(clippy::too_many_arguments)]
+    fn analyze_core(
+        &self,
+        source: &str,
+        tree: &Tree,
+        tests: Vec<crate::TestCase>,
+        stats: &mut crate::TestStats,
+        framework: crate::TestFramework,
+        test_type: crate::TestType,
+        test_path: &Path,
+        config: Option<&Config>,
+        source_file: Option<PathBuf>,
+        source_content: Option<String>,
+        source_tree: Option<Tree>,
+    ) -> Result<AnalysisResult> {
+        let skip_source = config
+            .map(|c| {
+                let effective = c.effective_for_file(test_path);
+                effective.skip_source_analysis || c.source_mapping.mode == SourceMappingMode::Off
+            })
+            .unwrap_or(false);
+
+        let (source_content_ref, source_tree_ref) = if self.analyze_source && !skip_source {
+            (source_content.as_deref(), source_tree.as_ref())
+        } else {
+            (None, None)
+        };
+
+        if let (Some(src_content), Some(src_tree)) = (source_content_ref, source_tree_ref) {
             let source_parser = SourceFileParser::new(src_content);
-            let coverage = source_parser.calculate_coverage(src_tree, &source);
-            stats.function_coverage = Some(coverage);
+            stats.function_coverage = Some(source_parser.calculate_coverage(src_tree, source));
         }
 
-        // Run all rules
         let assertion_rule = AssertionQualityRule::new();
         let error_rule =
-            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
                 ErrorCoverageRule::new()
-                    .with_source(content, tree)
+                    .with_source(content.to_string(), st.clone())
                     .with_test_type(test_type)
             } else {
                 ErrorCoverageRule::new().with_test_type(test_type)
             };
         let boundary_rule =
-            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-                BoundaryConditionsRule::new().with_source(content, tree)
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                BoundaryConditionsRule::new().with_source(content.to_string(), st.clone())
             } else {
                 BoundaryConditionsRule::new()
             };
@@ -201,64 +288,81 @@ impl AnalysisEngine {
         let assertion_intent_rule = AssertionIntentRule::new();
         let trivial_assertion_rule = TrivialAssertionRule::new();
         let return_path_rule =
-            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-                ReturnPathCoverageRule::new().with_source(content, tree)
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                ReturnPathCoverageRule::new().with_source(content.to_string(), st.clone())
             } else {
                 ReturnPathCoverageRule::new()
             };
         let behavioral_completeness_rule =
-            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-                BehavioralCompletenessRule::new().with_source(content, tree)
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                BehavioralCompletenessRule::new().with_source(content.to_string(), st.clone())
             } else {
                 BehavioralCompletenessRule::new()
             };
         let side_effect_rule =
-            if let (Some(content), Some(tree)) = (source_content.clone(), source_tree.clone()) {
-                SideEffectVerificationRule::new().with_source(content, tree)
+            if let (Some(ref content), Some(st)) = (source_content_ref, source_tree_ref) {
+                SideEffectVerificationRule::new().with_source(content.to_string(), st.clone())
             } else {
                 SideEffectVerificationRule::new()
             };
+        let test_complexity_rule = TestComplexityRule::new();
+        let implementation_coupling_rule = ImplementationCouplingRule::new();
+        let vacuous_test_rule = VacuousTestRule::new();
+        let incomplete_mock_rule = IncompleteMockVerificationRule::new();
+        let async_error_mishandling_rule = AsyncErrorMishandlingRule::new();
+        let redundant_test_rule = RedundantTestRule::new();
+        let unreachable_test_code_rule = UnreachableTestCodeRule::new();
+        let excessive_setup_rule = ExcessiveSetupRule::new();
+        let type_assertion_abuse_rule = TypeAssertionAbuseRule::new();
+        let missing_cleanup_rule = MissingCleanupRule::new();
+        let ai_smells_rule = AiSmellsRule::new();
 
-        // Collect all issues
         let mut issues = Vec::new();
-        issues.extend(assertion_rule.analyze(&tests, &source, &tree));
-        issues.extend(error_rule.analyze(&tests, &source, &tree));
-        issues.extend(boundary_rule.analyze(&tests, &source, &tree));
-        issues.extend(isolation_rule.analyze(&tests, &source, &tree));
-        issues.extend(variety_rule.analyze(&tests, &source, &tree));
-        issues.extend(debug_rule.analyze(&tests, &source, &tree));
-        issues.extend(flaky_rule.analyze(&tests, &source, &tree));
-        issues.extend(mock_rule.analyze(&tests, &source, &tree));
-        issues.extend(naming_rule.analyze(&tests, &source, &tree));
-        issues.extend(async_rule.analyze(&tests, &source, &tree));
-        issues.extend(rtl_rule.analyze(&tests, &source, &tree));
-        issues.extend(mutation_resistant_rule.analyze(&tests, &source, &tree));
-        issues.extend(boundary_specificity_rule.analyze(&tests, &source, &tree));
-        issues.extend(state_verification_rule.analyze(&tests, &source, &tree));
-        issues.extend(assertion_intent_rule.analyze(&tests, &source, &tree));
-        issues.extend(trivial_assertion_rule.analyze(&tests, &source, &tree));
-        issues.extend(return_path_rule.analyze(&tests, &source, &tree));
-        issues.extend(behavioral_completeness_rule.analyze(&tests, &source, &tree));
-        issues.extend(side_effect_rule.analyze(&tests, &source, &tree));
+        issues.extend(assertion_rule.analyze(&tests, source, tree));
+        issues.extend(error_rule.analyze(&tests, source, tree));
+        issues.extend(boundary_rule.analyze(&tests, source, tree));
+        issues.extend(isolation_rule.analyze(&tests, source, tree));
+        issues.extend(variety_rule.analyze(&tests, source, tree));
+        issues.extend(debug_rule.analyze(&tests, source, tree));
+        issues.extend(flaky_rule.analyze(&tests, source, tree));
+        issues.extend(mock_rule.analyze(&tests, source, tree));
+        issues.extend(naming_rule.analyze(&tests, source, tree));
+        issues.extend(async_rule.analyze(&tests, source, tree));
+        issues.extend(rtl_rule.analyze(&tests, source, tree));
+        issues.extend(mutation_resistant_rule.analyze(&tests, source, tree));
+        issues.extend(boundary_specificity_rule.analyze(&tests, source, tree));
+        issues.extend(state_verification_rule.analyze(&tests, source, tree));
+        issues.extend(assertion_intent_rule.analyze(&tests, source, tree));
+        issues.extend(trivial_assertion_rule.analyze(&tests, source, tree));
+        issues.extend(return_path_rule.analyze(&tests, source, tree));
+        issues.extend(behavioral_completeness_rule.analyze(&tests, source, tree));
+        issues.extend(side_effect_rule.analyze(&tests, source, tree));
+        issues.extend(test_complexity_rule.analyze(&tests, source, tree));
+        issues.extend(implementation_coupling_rule.analyze(&tests, source, tree));
+        issues.extend(vacuous_test_rule.analyze(&tests, source, tree));
+        issues.extend(incomplete_mock_rule.analyze(&tests, source, tree));
+        issues.extend(async_error_mishandling_rule.analyze(&tests, source, tree));
+        issues.extend(redundant_test_rule.analyze(&tests, source, tree));
+        issues.extend(unreachable_test_code_rule.analyze(&tests, source, tree));
+        issues.extend(excessive_setup_rule.analyze(&tests, source, tree));
+        issues.extend(type_assertion_abuse_rule.analyze(&tests, source, tree));
+        issues.extend(missing_cleanup_rule.analyze(&tests, source, tree));
+        issues.extend(ai_smells_rule.analyze(&tests, source, tree));
 
-        // Run coupling analysis if we have function coverage data
         if let Some(ref fc) = stats.function_coverage {
             let coupling_rule =
                 CouplingAnalysisRule::new().with_source_exports(fc.untested_exports.clone());
-            issues.extend(coupling_rule.analyze(&tests, &source, &tree));
+            issues.extend(coupling_rule.analyze(&tests, source, tree));
         }
 
-        // Apply ignore comments: filter issues that have rigor-ignore on their line
-        let ignore_directives = IgnoreDirectives::parse(&source);
+        let ignore_directives = IgnoreDirectives::parse(source);
         let issues: Vec<Issue> = issues
             .into_iter()
             .filter(|i| !ignore_directives.is_ignored(i.location.line, i.rule))
             .collect();
 
-        // Apply config: filter rules set to "off", override severity
         let issues = self.apply_config_to_issues(issues, config, test_path);
 
-        // Calculate scores (after filtering so breakdown reflects config)
         let breakdown = ScoreCalculator::calculate_breakdown(
             &tests,
             &issues,
@@ -267,18 +371,92 @@ impl AnalysisEngine {
             &boundary_rule,
             &isolation_rule,
             &variety_rule,
+            &ai_smells_rule,
         );
-        // Use weighted scoring based on test type for more accurate assessment
         let score = ScoreCalculator::calculate_weighted(&breakdown, test_type);
-        // Apply issue-based penalty so problems (errors/warnings/info) lower the grade
-        let score = ScoreCalculator::apply_issue_penalty(score, &issues);
+        let scoring_v2 = config
+            .and_then(|c| c.scoring_version.as_deref())
+            .map(|v| v == "v2")
+            .unwrap_or(false);
+        let score = if scoring_v2 {
+            ScoreCalculator::apply_issue_penalty_v2(score, &issues)
+        } else {
+            ScoreCalculator::apply_issue_penalty(score, &issues)
+        };
+
+        let mut transparent_breakdown = Some(ScoreCalculator::build_transparent_breakdown(
+            &breakdown, &issues, test_type, scoring_v2,
+        ));
+
+        let test_scores: Vec<TestScore> = tests
+            .iter()
+            .map(|test| {
+                let issues_for_test: Vec<Issue> = issues
+                    .iter()
+                    .filter(|i| issue_in_test_range(i, test.location.line, test.location.end_line))
+                    .cloned()
+                    .collect();
+                let breakdown_t = ScoreCalculator::calculate_breakdown(
+                    std::slice::from_ref(test),
+                    &issues_for_test,
+                    &assertion_rule,
+                    &error_rule,
+                    &boundary_rule,
+                    &isolation_rule,
+                    &variety_rule,
+                    &ai_smells_rule,
+                );
+                let score_t = ScoreCalculator::calculate_weighted(&breakdown_t, test_type);
+                let score_t = if scoring_v2 {
+                    ScoreCalculator::apply_issue_penalty_v2(score_t, &issues_for_test)
+                } else {
+                    ScoreCalculator::apply_issue_penalty(score_t, &issues_for_test)
+                };
+                TestScore {
+                    name: test.name.clone(),
+                    line: test.location.line,
+                    end_line: test.location.end_line,
+                    score: score_t.value,
+                    grade: score_t.grade,
+                    issues: issues_for_test,
+                }
+            })
+            .collect();
+
+        let score = if test_scores.is_empty() {
+            score
+        } else {
+            let total_weight: u32 = tests
+                .iter()
+                .map(|t| 1 + t.assertions.len() as u32)
+                .sum::<u32>()
+                .max(1);
+            let weighted_sum: u32 = test_scores
+                .iter()
+                .zip(tests.iter())
+                .map(|(ts, t)| ts.score as u32 * (1 + t.assertions.len() as u32))
+                .sum();
+            let aggregated = (weighted_sum / total_weight).min(100) as u8;
+            if let Some(ref mut tb) = transparent_breakdown {
+                tb.final_score = aggregated;
+            }
+            Score::new(aggregated)
+        };
+
+        let test_scores = if test_scores.is_empty() {
+            None
+        } else {
+            Some(test_scores)
+        };
 
         Ok(AnalysisResult {
             file_path: test_path.to_path_buf(),
             score,
             breakdown,
+            transparent_breakdown,
+            test_scores,
             issues,
-            stats,
+            stats: stats.clone(),
             framework,
             test_type,
             source_file,
@@ -420,8 +598,8 @@ mod tests {
             "should report weak/trivial issues"
         );
         assert!(
-            result.score.value < 80,
-            "file with weak + trivial assertions and vague names should not get B or A (got {} = {})",
+            result.score.value < 90,
+            "file with weak + trivial assertions and vague names should not get A (got {} = {})",
             result.score.value,
             result.score.grade
         );

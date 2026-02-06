@@ -49,6 +49,7 @@ impl AnalysisRule for AssertionQualityRule {
                     suggestion: Some(
                         "Add assertions, e.g. expect(result).toBe(expected) or expect(fn).toHaveBeenCalledWith(arg)".to_string(),
                     ),
+                    fix: None,
                 });
                 continue;
             }
@@ -66,6 +67,7 @@ impl AnalysisRule for AssertionQualityRule {
                         ),
                         location: assertion.location.clone(),
                         suggestion: Some(Self::suggestion_for_weak_assertion(&assertion.raw)),
+                        fix: None,
                     });
                 }
             }
@@ -80,6 +82,7 @@ impl AnalysisRule for AssertionQualityRule {
                     suggestion: Some(
                         "Remove .skip or .todo if the test should be active".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -107,6 +110,7 @@ impl AnalysisRule for AssertionQualityRule {
                     suggestion: Some(
                         "Add specific checks: expect(obj).toMatchSnapshot(); expect(obj.items).toHaveLength(3); expect(obj.status).toBe('ok')".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }
@@ -137,6 +141,7 @@ impl AnalysisRule for AssertionQualityRule {
                     suggestion: Some(
                         "Prefer toBe(), toEqual(), or toHaveLength() for critical behavior; use snapshots sparingly".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }

@@ -182,7 +182,8 @@ impl AnalysisRule for TrivialAssertionRule {
                         suggestion: Some(
                             "Assert on the actual result of the code under test (e.g. expect(actualResult).toBe(expected)) instead of literals.".to_string(),
                         ),
-                    });
+                        fix: None,
+                });
                 }
             }
 
@@ -200,6 +201,7 @@ impl AnalysisRule for TrivialAssertionRule {
                     suggestion: Some(
                         "Replace with assertions on the result of the code under test (e.g. expect(myFunction()).toBe(expected)).".to_string(),
                     ),
+                    fix: None,
                 });
             }
         }

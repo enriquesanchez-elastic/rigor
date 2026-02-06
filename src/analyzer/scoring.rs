@@ -1,12 +1,23 @@
 //! Score calculation for test quality
+//!
+//! ## Scoring v2: No double-counting
+//! With `scoring_version: "v2"` in config, each issue affects exactly one of:
+//! - **Category score** (via the five category rules' `calculate_score`): WeakAssertion, NoAssertions,
+//!   MissingErrorTest, MissingBoundaryTest, SharedState, HardcodedValues, LimitedInputVariety,
+//!   DuplicateTest, TrivialAssertion, AssertionIntentMismatch, MutationResistant, BoundarySpecificity,
+//!   StateVerification, ReturnPathCoverage, BehavioralCompleteness, SideEffectNotVerified.
+//! - **Penalty only** (not category): DebugCode, FocusedTest, SkippedTest, EmptyTest, FlakyPattern,
+//!   MockAbuse, SnapshotOveruse, VagueTestName, MissingAwait, RtlPreferScreen, RtlPreferSemantic,
+//!   RtlPreferUserEvent. See `crate::rule_scoring_category` for the mapping.
 
 use crate::{
-    Grade, Issue, Rule, Score, ScoreBreakdown, ScoringWeights, Severity, TestCase, TestType,
+    rule_scoring_category, CategoryBreakdownEntry, Grade, Issue, Rule, Score, ScoreBreakdown,
+    ScoringWeights, Severity, TestCase, TestType, TransparentBreakdown,
 };
 
 use super::rules::{
-    AssertionQualityRule, BoundaryConditionsRule, ErrorCoverageRule, InputVarietyRule,
-    TestIsolationRule,
+    AiSmellsRule, AssertionQualityRule, BoundaryConditionsRule, ErrorCoverageRule,
+    InputVarietyRule, TestIsolationRule,
 };
 
 /// Penalty points per issue by severity (applied after category score).
@@ -38,6 +49,7 @@ impl ScoreCalculator {
     /// Apply issue-based penalty so that files with many problems get lower grades.
     /// Errors and warnings (trivial assertions, debug code, flaky patterns, etc.)
     /// now directly reduce the final score.
+    /// (v1: all issues count toward penalty.)
     pub fn apply_issue_penalty(score: Score, issues: &[Issue]) -> Score {
         let errors = issues
             .iter()
@@ -60,7 +72,33 @@ impl ScoreCalculator {
         Score::new(value)
     }
 
+    /// Apply issue-based penalty (v2: no double-counting).
+    /// Only issues that do NOT affect a category score (e.g. DebugCode, FocusedTest)
+    /// are counted here. Issues that reduce a category (e.g. WeakAssertion, MissingErrorTest)
+    /// are not penalized again.
+    pub fn apply_issue_penalty_v2(score: Score, issues: &[Issue]) -> Score {
+        let (errors, warnings, infos) = issues.iter().fold((0i32, 0i32, 0i32), |acc, i| {
+            if rule_scoring_category(&i.rule).is_some() {
+                acc
+            } else {
+                match i.severity {
+                    Severity::Error => (acc.0 + 1, acc.1, acc.2),
+                    Severity::Warning => (acc.0, acc.1 + 1, acc.2),
+                    Severity::Info => (acc.0, acc.1, acc.2 + 1),
+                }
+            }
+        });
+
+        let penalty = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS)
+            + (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS)
+            + (infos * PENALTY_PER_INFO).min(MAX_PENALTY_FROM_INFO);
+
+        let value = (score.value as i32 - penalty).clamp(0, 100) as u8;
+        Score::new(value)
+    }
+
     /// Calculate breakdown from tests and issues
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_breakdown(
         tests: &[TestCase],
         issues: &[Issue],
@@ -69,6 +107,7 @@ impl ScoreCalculator {
         boundary_rule: &BoundaryConditionsRule,
         isolation_rule: &TestIsolationRule,
         variety_rule: &InputVarietyRule,
+        ai_smells_rule: &AiSmellsRule,
     ) -> ScoreBreakdown {
         use super::rules::AnalysisRule;
 
@@ -78,6 +117,7 @@ impl ScoreCalculator {
             boundary_conditions: boundary_rule.calculate_score(tests, issues),
             test_isolation: isolation_rule.calculate_score(tests, issues),
             input_variety: variety_rule.calculate_score(tests, issues),
+            ai_smells: ai_smells_rule.calculate_score(tests, issues),
         }
     }
 
@@ -89,6 +129,115 @@ impl ScoreCalculator {
             Grade::C => "Fair - Tests provide basic coverage but need strengthening",
             Grade::D => "Poor - Tests have significant quality issues",
             Grade::F => "Failing - Tests need major improvements",
+        }
+    }
+
+    /// Build full transparent breakdown: category scores, weights, and penalties.
+    /// When `scoring_v2` is true, penalty counts only issues that do not affect a category (no double-counting).
+    pub fn build_transparent_breakdown(
+        breakdown: &ScoreBreakdown,
+        issues: &[Issue],
+        test_type: TestType,
+        scoring_v2: bool,
+    ) -> TransparentBreakdown {
+        const PENALTY_PER_ERROR: i32 = 5;
+        const PENALTY_PER_WARNING: i32 = 2;
+        const PENALTY_PER_INFO: i32 = 1;
+        const MAX_PENALTY_FROM_ERRORS: i32 = 35;
+        const MAX_PENALTY_FROM_WARNINGS: i32 = 40;
+        const MAX_PENALTY_FROM_INFO: i32 = 15;
+
+        let weights = ScoringWeights::for_test_type(test_type);
+        let categories = [
+            (
+                "Assertion Quality",
+                breakdown.assertion_quality,
+                weights.assertion_quality,
+            ),
+            (
+                "Error Coverage",
+                breakdown.error_coverage,
+                weights.error_coverage,
+            ),
+            (
+                "Boundary Conditions",
+                breakdown.boundary_conditions,
+                weights.boundary_conditions,
+            ),
+            (
+                "Test Isolation",
+                breakdown.test_isolation,
+                weights.test_isolation,
+            ),
+            (
+                "Input Variety",
+                breakdown.input_variety,
+                weights.input_variety,
+            ),
+            ("AI Smells", breakdown.ai_smells, weights.ai_smells),
+        ];
+
+        let category_entries: Vec<CategoryBreakdownEntry> = categories
+            .iter()
+            .map(|(name, raw, weight_pct)| {
+                let weighted_contribution =
+                    ((*raw as u32) * (*weight_pct as u32) / 25).min(100) as u8;
+                CategoryBreakdownEntry {
+                    category_name: (*name).to_string(),
+                    raw_score: *raw,
+                    max_raw: 25,
+                    weight_pct: *weight_pct,
+                    weighted_contribution,
+                }
+            })
+            .collect();
+
+        let total_before_penalties = weights.calculate_total(breakdown);
+
+        let (errors, warnings, infos) = if scoring_v2 {
+            issues.iter().fold((0i32, 0i32, 0i32), |acc, i| {
+                if rule_scoring_category(&i.rule).is_some() {
+                    acc
+                } else {
+                    match i.severity {
+                        Severity::Error => (acc.0 + 1, acc.1, acc.2),
+                        Severity::Warning => (acc.0, acc.1 + 1, acc.2),
+                        Severity::Info => (acc.0, acc.1, acc.2 + 1),
+                    }
+                }
+            })
+        } else {
+            (
+                issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Error)
+                    .count() as i32,
+                issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Warning)
+                    .count() as i32,
+                issues
+                    .iter()
+                    .filter(|i| i.severity == Severity::Info)
+                    .count() as i32,
+            )
+        };
+
+        let penalty_from_errors = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS);
+        let penalty_from_warnings = (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS);
+        let penalty_from_info = (infos * PENALTY_PER_INFO).min(MAX_PENALTY_FROM_INFO);
+        let penalty_total = penalty_from_errors + penalty_from_warnings + penalty_from_info;
+
+        let final_score = (total_before_penalties as i32 - penalty_total).clamp(0, 100) as u8;
+
+        TransparentBreakdown {
+            categories: category_entries,
+            total_before_penalties,
+            penalty_total,
+            penalty_from_errors,
+            penalty_from_warnings,
+            penalty_from_info,
+            final_score,
         }
     }
 
@@ -184,7 +333,7 @@ impl ScoreCalculator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Location;
+    use crate::{Issue, Location, Rule, Severity};
 
     #[test]
     fn test_score_calculation() {
@@ -194,12 +343,13 @@ mod tests {
             boundary_conditions: 15,
             test_isolation: 22,
             input_variety: 20,
+            ai_smells: 25,
         };
 
         let score = ScoreCalculator::calculate(&breakdown);
-        // total() normalizes sum (max 125) to 0-100: (95 * 100) / 125 = 76
-        assert_eq!(score.value, 76);
-        assert_eq!(score.grade, Grade::C);
+        // total() normalizes sum (max 150, six categories) to 0-100: (120 * 100) / 150 = 80
+        assert_eq!(score.value, 80);
+        assert_eq!(score.grade, Grade::B);
     }
 
     #[test]
@@ -210,6 +360,7 @@ mod tests {
             boundary_conditions: 25,
             test_isolation: 25,
             input_variety: 25,
+            ai_smells: 25,
         };
         let score = ScoreCalculator::calculate(&breakdown);
         assert_eq!(score.value, 100);
@@ -224,6 +375,7 @@ mod tests {
             boundary_conditions: 0,
             test_isolation: 0,
             input_variety: 0,
+            ai_smells: 0,
         };
         let score = ScoreCalculator::calculate(&breakdown);
         assert_eq!(score.value, 0);
@@ -239,6 +391,7 @@ mod tests {
             boundary_conditions: 10,
             test_isolation: 10,
             input_variety: 10,
+            ai_smells: 10,
         };
         assert_eq!(breakdown.total(), 40);
 
@@ -249,6 +402,7 @@ mod tests {
             boundary_conditions: 25,
             test_isolation: 25,
             input_variety: 25,
+            ai_smells: 25,
         };
         assert_eq!(perfect.total(), 100);
     }
@@ -290,6 +444,7 @@ mod tests {
                 message: "error1".to_string(),
                 location: Location::new(1, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: crate::Rule::WeakAssertion,
@@ -297,6 +452,7 @@ mod tests {
                 message: "error2".to_string(),
                 location: Location::new(2, 1),
                 suggestion: None,
+                fix: None,
             },
         ];
         let result = ScoreCalculator::apply_issue_penalty(score, &issues);
@@ -316,6 +472,7 @@ mod tests {
                 message: format!("err{}", i),
                 location: Location::new(i + 1, 1),
                 suggestion: None,
+                fix: None,
             })
             .collect();
         let result = ScoreCalculator::apply_issue_penalty(score, &issues);
@@ -333,6 +490,7 @@ mod tests {
                 message: "e".to_string(),
                 location: Location::new(1, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: crate::Rule::VagueTestName,
@@ -340,6 +498,7 @@ mod tests {
                 message: "w".to_string(),
                 location: Location::new(2, 1),
                 suggestion: None,
+                fix: None,
             },
             Issue {
                 rule: crate::Rule::HardcodedValues,
@@ -347,6 +506,7 @@ mod tests {
                 message: "i".to_string(),
                 location: Location::new(3, 1),
                 suggestion: None,
+                fix: None,
             },
         ];
         let result = ScoreCalculator::apply_issue_penalty(score, &issues);
@@ -363,6 +523,7 @@ mod tests {
             boundary_conditions: 10,
             test_isolation: 10,
             input_variety: 10,
+            ai_smells: 10,
         };
         let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::F);
         assert!(recs.len() >= 5);
@@ -381,6 +542,7 @@ mod tests {
             boundary_conditions: 20,
             test_isolation: 20,
             input_variety: 20,
+            ai_smells: 20,
         };
         let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::A);
         assert_eq!(recs.len(), 1);
@@ -395,6 +557,7 @@ mod tests {
             boundary_conditions: 25,
             test_isolation: 25,
             input_variety: 25,
+            ai_smells: 25,
         };
         let recs = ScoreCalculator::recommendations(&breakdown, &[], Grade::C);
         assert_eq!(recs.len(), 1);
@@ -408,5 +571,116 @@ mod tests {
         assert!(ScoreCalculator::grade_description(Grade::C).contains("Fair"));
         assert!(ScoreCalculator::grade_description(Grade::D).contains("Poor"));
         assert!(ScoreCalculator::grade_description(Grade::F).contains("Failing"));
+    }
+
+    #[test]
+    fn test_build_transparent_breakdown_sums_to_final_score() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 20,
+            error_coverage: 18,
+            boundary_conditions: 15,
+            test_isolation: 17,
+            input_variety: 15,
+            ai_smells: 25,
+        };
+        let issues: Vec<Issue> = vec![
+            Issue {
+                rule: Rule::WeakAssertion,
+                severity: Severity::Warning,
+                message: "w".to_string(),
+                location: Location::new(1, 1),
+                suggestion: None,
+                fix: None,
+            },
+            Issue {
+                rule: Rule::DebugCode,
+                severity: Severity::Error,
+                message: "e".to_string(),
+                location: Location::new(2, 1),
+                suggestion: None,
+                fix: None,
+            },
+        ];
+        let tb = ScoreCalculator::build_transparent_breakdown(
+            &breakdown,
+            &issues,
+            TestType::Unit,
+            false,
+        );
+        assert_eq!(tb.categories.len(), 6);
+        assert_eq!(
+            tb.final_score as i32,
+            tb.total_before_penalties as i32 - tb.penalty_total
+        );
+        assert!(tb.penalty_total > 0);
+        assert!(tb.penalty_from_errors > 0);
+        assert!(tb.penalty_from_warnings > 0);
+    }
+
+    #[test]
+    fn test_v2_no_penalty_for_category_issues() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 20,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+            ai_smells: 25,
+        };
+        let issues = vec![Issue {
+            rule: Rule::WeakAssertion,
+            severity: Severity::Warning,
+            message: "weak".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+            fix: None,
+        }];
+        let score_before = ScoreCalculator::calculate_weighted(&breakdown, TestType::Unit);
+        let score_v1 = ScoreCalculator::apply_issue_penalty(score_before.clone(), &issues);
+        let score_v2 = ScoreCalculator::apply_issue_penalty_v2(score_before, &issues);
+        assert!(
+            score_v2.value > score_v1.value,
+            "v2 should not penalize category-only issue"
+        );
+        let tb =
+            ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit, true);
+        assert_eq!(tb.penalty_from_warnings, 0);
+        assert_eq!(tb.penalty_total, 0);
+    }
+
+    #[test]
+    fn test_v2_penalty_for_penalty_only_issues() {
+        let breakdown = ScoreBreakdown {
+            assertion_quality: 25,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+            ai_smells: 25,
+        };
+        let issues = vec![
+            Issue {
+                rule: Rule::DebugCode,
+                severity: Severity::Warning,
+                message: "debug".to_string(),
+                location: Location::new(1, 1),
+                suggestion: None,
+                fix: None,
+            },
+            Issue {
+                rule: Rule::FocusedTest,
+                severity: Severity::Error,
+                message: "only".to_string(),
+                location: Location::new(2, 1),
+                suggestion: None,
+                fix: None,
+            },
+        ];
+        let score_before = ScoreCalculator::calculate_weighted(&breakdown, TestType::Unit);
+        let score_v2 = ScoreCalculator::apply_issue_penalty_v2(score_before, &issues);
+        let tb =
+            ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit, true);
+        assert!(tb.penalty_total > 0);
+        assert_eq!(score_v2.value as i32, tb.final_score as i32);
     }
 }

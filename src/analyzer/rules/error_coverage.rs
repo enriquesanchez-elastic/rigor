@@ -111,6 +111,7 @@ impl AnalysisRule for ErrorCoverageRule {
                             "Add: it('throws for invalid input', () => {{ expect(() => {}(invalid)).toThrow(ErrorType); }})",
                             throwable.name
                         )),
+                        fix: None,
                     });
                 }
             }
@@ -160,6 +161,7 @@ impl AnalysisRule for ErrorCoverageRule {
                             suggestion: Some(
                                 "Sync: expect(() => fn(bad)).toThrow(ErrorType); Async: await expect(fn()).rejects.toThrow('message')".to_string()
                             ),
+                            fix: None,
                         });
                     }
                 }

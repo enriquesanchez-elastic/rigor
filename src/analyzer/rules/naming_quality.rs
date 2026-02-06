@@ -120,6 +120,7 @@ impl AnalysisRule for NamingQualityRule {
                     suggestion: Some(
                         "Use a name that describes the scenario and expected outcome, e.g. 'returns 404 when user not found'".to_string(),
                     ),
+                    fix: None,
                 });
             } else if Self::has_no_verb(&test.name) {
                 issues.push(Issue {
@@ -131,6 +132,7 @@ impl AnalysisRule for NamingQualityRule {
                     ),
                     location: test.location.clone(),
                     suggestion: Some("Start with should/returns/throws to describe behavior".to_string()),
+                    fix: None,
                 });
             } else if Self::is_sequential_name(&test.name, &all_names) {
                 issues.push(Issue {
@@ -142,6 +144,7 @@ impl AnalysisRule for NamingQualityRule {
                     ),
                     location: test.location.clone(),
                     suggestion: Some("Give each test a unique, descriptive name".to_string()),
+                    fix: None,
                 });
             }
         }

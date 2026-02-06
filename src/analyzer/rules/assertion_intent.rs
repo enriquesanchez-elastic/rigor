@@ -162,6 +162,7 @@ impl AnalysisRule for AssertionIntentRule {
                     suggestion: Some(
                         "Add expect(fn).toThrow() or expect(promise).rejects.toThrow(...) so the test actually verifies the error.".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -178,6 +179,7 @@ impl AnalysisRule for AssertionIntentRule {
                     suggestion: Some(
                         "Add expect(response.status).toBe(404) or expect(response.statusCode).toBe(200) so the test verifies the status.".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -200,6 +202,7 @@ impl AnalysisRule for AssertionIntentRule {
                     suggestion: Some(
                         "Add expect(result).toHaveLength(0) or expect(result).toEqual([]) so the test verifies emptiness.".to_string(),
                     ),
+                    fix: None,
                 });
             }
 
@@ -223,6 +226,7 @@ impl AnalysisRule for AssertionIntentRule {
                         suggestion: Some(
                             "Add expect(result).toBe(expected) or expect(result).toEqual(expected) with the specific value so the test verifies what it claims.".to_string(),
                         ),
+                    fix: None,
                     });
                 }
             }

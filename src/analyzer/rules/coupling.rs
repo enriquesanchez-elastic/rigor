@@ -177,6 +177,7 @@ impl AnalysisRule for CouplingAnalysisRule {
                         ),
                         location: Location::new(1, 1),
                         suggestion: Some(format!("Consider adding tests for '{}'", export_name)),
+                        fix: None,
                     });
                 }
             }
@@ -210,6 +211,7 @@ impl AnalysisRule for CouplingAnalysisRule {
                             "Either remove unused import or add tests that use '{}'",
                             name
                         )),
+                        fix: None,
                     });
                 }
             }

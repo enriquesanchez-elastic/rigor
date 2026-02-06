@@ -13,6 +13,7 @@ use rigor::mutation::{self, report_mutation_result};
 use rigor::reporter::{ConsoleReporter, JsonReporter, SarifReporter};
 use rigor::suggestions::{extract_code_block, offer_apply, AiSuggestionGenerator};
 use rigor::watcher::TestWatcher;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use walkdir::WalkDir;
@@ -45,11 +46,11 @@ struct Args {
     #[arg(long, short)]
     verbose: bool,
 
-    /// Generate AI improvement prompt
+    /// Generate AI improvement prompt (use with --apply to auto-apply or --fix-output to write to file)
     #[arg(long)]
-    fix: bool,
+    suggest: bool,
 
-    /// With --fix: run RIGOR_APPLY_CMD with prompt on stdin and apply suggested code (prompts for confirmation)
+    /// With --suggest: run RIGOR_APPLY_CMD with prompt on stdin and apply suggested code (prompts for confirmation)
     #[arg(long)]
     apply: bool,
 
@@ -93,6 +94,14 @@ struct Args {
     #[arg(long)]
     clear_cache: bool,
 
+    /// Apply auto-fixes for fixable rules (e.g. focused-test, debug-code)
+    #[arg(long)]
+    fix: bool,
+
+    /// Show what would be fixed without modifying files
+    #[arg(long)]
+    fix_dry_run: bool,
+
     /// Run analysis in parallel (default for directories with many files)
     #[arg(long)]
     parallel: bool,
@@ -104,6 +113,14 @@ struct Args {
     /// Path to coverage JSON file (Istanbul/c8/nyc format)
     #[arg(long, value_name = "PATH")]
     coverage: Option<PathBuf>,
+
+    /// Read test source from stdin (for programmatic/API use). Use with --json for machine-readable output.
+    #[arg(long)]
+    stdin: bool,
+
+    /// Virtual filename for --stdin (extension used for parser; default: stdin.test.ts)
+    #[arg(long, value_name = "FILE")]
+    stdin_filename: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -159,14 +176,15 @@ fn run() -> Result<ExitCode> {
 
     let path = match &args.path {
         Some(p) => p.clone(),
+        None if args.stdin => PathBuf::from("."),
         None => {
             anyhow::bail!(
-                "Please provide a path to a test file or directory, or use a subcommand (e.g. rigor init)"
+                "Please provide a path to a test file or directory, use --stdin, or use a subcommand (e.g. rigor init)"
             );
         }
     };
 
-    if args.watch {
+    if args.watch && !args.stdin {
         return run_watch(&args, &path);
     }
 
@@ -181,89 +199,104 @@ fn run() -> Result<ExitCode> {
     let config = load_config(work_dir, args.config.as_deref())?
         .merge_with_cli(args.threshold, args.config.as_deref());
 
-    // Build ignore set from config
-    let ignore_set = if config.ignore.is_empty() {
-        None
-    } else {
-        Some(build_ignore_set(&config.ignore)?)
-    };
-
-    // Collect test files: either staged, changed, or from path
-    // Use test_root from config if set, otherwise use the CLI path
-    let search_path = if let Some(ref test_root) = config.test_root {
-        let root = if path.is_file() {
-            path.parent().unwrap_or(Path::new("."))
+    // --- Stdin mode: analyze test source from stdin (programmatic API) ---
+    let mut cache = AnalysisCache::disabled();
+    let (mut results, had_errors) = if args.stdin {
+        let mut content = String::new();
+        std::io::stdin()
+            .read_to_string(&mut content)
+            .context("Failed to read from stdin")?;
+        let virtual_path = args
+            .stdin_filename
+            .as_deref()
+            .unwrap_or(Path::new("stdin.test.ts"));
+        let engine = if args.no_source {
+            AnalysisEngine::new().without_source_analysis()
         } else {
-            path.as_path()
+            AnalysisEngine::new()
         };
-        root.join(test_root)
+        let result = engine
+            .analyze_source(&content, virtual_path, Some(&config))
+            .context("Stdin analysis failed")?;
+        (vec![result], false)
     } else {
-        path.clone()
-    };
+        // Build ignore set from config
+        let ignore_set = if config.ignore.is_empty() {
+            None
+        } else {
+            Some(build_ignore_set(&config.ignore)?)
+        };
 
-    let test_patterns = config.get_test_patterns();
-    let test_files = if args.staged {
-        let git_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
-        collect_staged_test_files(&git_root, ignore_set.as_ref(), &test_patterns)?
-    } else if args.changed {
-        let git_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
-        collect_changed_test_files(&git_root, ignore_set.as_ref(), &test_patterns)?
-    } else {
-        collect_test_files(&search_path, ignore_set.as_ref(), &test_patterns)?
-    };
+        // Collect test files: either staged, changed, or from path
+        let search_path = if let Some(ref test_root) = config.test_root {
+            let root = if path.is_file() {
+                path.parent().unwrap_or(Path::new("."))
+            } else {
+                path.as_path()
+            };
+            root.join(test_root)
+        } else {
+            path.clone()
+        };
 
-    if test_files.is_empty() {
-        if args.staged || args.changed {
-            if !args.quiet {
-                eprintln!("{}: No changed test files to analyze", "Info".blue());
+        let test_patterns = config.get_test_patterns();
+        let test_files = if args.staged {
+            let git_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
+            collect_staged_test_files(&git_root, ignore_set.as_ref(), &test_patterns)?
+        } else if args.changed {
+            let git_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
+            collect_changed_test_files(&git_root, ignore_set.as_ref(), &test_patterns)?
+        } else {
+            collect_test_files(&search_path, ignore_set.as_ref(), &test_patterns)?
+        };
+
+        if test_files.is_empty() {
+            if args.staged || args.changed {
+                if !args.quiet {
+                    eprintln!("{}: No changed test files to analyze", "Info".blue());
+                }
+                return Ok(ExitCode::SUCCESS);
             }
-            return Ok(ExitCode::SUCCESS);
+            eprintln!("{}: No test files found", "Warning".yellow());
+            return Ok(ExitCode::from(2));
         }
-        eprintln!("{}: No test files found", "Warning".yellow());
-        return Ok(ExitCode::from(2));
-    }
 
-    // Set up cache
-    let project_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
-    let mut cache = if args.no_cache {
-        AnalysisCache::disabled()
-    } else {
-        AnalysisCache::new(&project_root)
-    };
+        let project_root = find_project_root(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
+        cache = if args.no_cache {
+            AnalysisCache::disabled()
+        } else {
+            AnalysisCache::new(&project_root)
+        };
 
-    // Clear cache if requested
-    if args.clear_cache {
-        cache.clear();
-        if !args.quiet {
-            eprintln!("{}: Cache cleared", "Info".blue());
+        if args.clear_cache {
+            cache.clear();
+            if !args.quiet {
+                eprintln!("{}: Cache cleared", "Info".blue());
+            }
         }
-    }
 
-    // Set up parallel processing
-    if let Some(jobs) = args.jobs {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(jobs)
-            .build_global()
-            .ok();
-    }
+        if let Some(jobs) = args.jobs {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(jobs)
+                .build_global()
+                .ok();
+        }
 
-    // Create analysis engine
-    let engine = if args.no_source {
-        AnalysisEngine::new().without_source_analysis()
-    } else {
-        AnalysisEngine::new()
-    };
+        let engine = if args.no_source {
+            AnalysisEngine::new().without_source_analysis()
+        } else {
+            AnalysisEngine::new()
+        };
 
-    // Determine if we should use parallel analysis
-    let use_parallel = args.parallel || test_files.len() > 10;
+        let use_parallel = args.parallel || test_files.len() > 10;
 
-    // Analyze files
-    let (results, had_errors) = if use_parallel && !args.no_cache {
-        analyze_files_parallel_cached(&engine, &test_files, &config, &cache, args.quiet)
-    } else if use_parallel {
-        analyze_files_parallel(&engine, &test_files, &config, args.quiet)
-    } else {
-        analyze_files_sequential_cached(&engine, &test_files, &config, &mut cache, args.quiet)
+        if use_parallel && !args.no_cache {
+            analyze_files_parallel_cached(&engine, &test_files, &config, &cache, args.quiet)
+        } else if use_parallel {
+            analyze_files_parallel(&engine, &test_files, &config, args.quiet)
+        } else {
+            analyze_files_sequential_cached(&engine, &test_files, &config, &mut cache, args.quiet)
+        }
     };
 
     // Save cache
@@ -276,6 +309,69 @@ fn run() -> Result<ExitCode> {
     if results.is_empty() {
         eprintln!("{}: All files failed to analyze", "Error".red());
         return Ok(ExitCode::from(2));
+    }
+
+    // Attach fix metadata for fixable issues (skip when --stdin: virtual path not on disk)
+    if !args.stdin {
+        for result in &mut results {
+            if let Ok(content) = std::fs::read_to_string(&result.file_path) {
+                let lines: Vec<&str> = content.lines().collect();
+                for issue in &mut result.issues {
+                    if issue.fix.is_none() {
+                        let line_no = issue.location.line;
+                        let line = lines.get(line_no.saturating_sub(1)).copied().unwrap_or("");
+                        if let Some(fix) = rigor::fixer::fix_for_issue(issue, line, line_no) {
+                            issue.fix = Some(fix);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if args.fix_dry_run {
+        let mut count = 0;
+        for result in &results {
+            for issue in &result.issues {
+                if let Some(ref fix) = issue.fix {
+                    count += 1;
+                    eprintln!(
+                        "{}:{}:{}: {} → {}",
+                        result.file_path.display(),
+                        fix.start_line,
+                        fix.start_column,
+                        issue.rule,
+                        fix.replacement
+                    );
+                }
+            }
+        }
+        if count == 0 {
+            eprintln!("No auto-fixable issues found.");
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    if args.fix {
+        for result in &results {
+            let fixes: Vec<_> = result.issues.iter().filter_map(|i| i.fix.clone()).collect();
+            if !fixes.is_empty() {
+                if let Err(e) = rigor::fixer::apply_fixes(&result.file_path, &fixes) {
+                    eprintln!(
+                        "{}: Failed to apply fixes: {}",
+                        result.file_path.display(),
+                        e
+                    );
+                } else if !args.quiet {
+                    eprintln!(
+                        "Applied {} fix(es) to {}",
+                        fixes.len(),
+                        result.file_path.display()
+                    );
+                }
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
     }
 
     // Calculate aggregate stats
@@ -416,10 +512,10 @@ fn run() -> Result<ExitCode> {
     }
 
     // Generate AI fix prompt and optionally apply
-    if args.fix {
+    if args.suggest {
         if results.len() > 1 {
             eprintln!(
-                "{}: --fix only works with a single file",
+                "{}: --suggest only works with a single file",
                 "Warning".yellow()
             );
         } else {
