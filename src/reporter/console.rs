@@ -124,8 +124,7 @@ impl ConsoleReporter {
                     cat.weighted_contribution
                 );
             }
-            let after_penalty =
-                (tb.total_before_penalties as i32 - tb.penalty_total).max(0) as u8;
+            let after_penalty = (tb.total_before_penalties as i32 - tb.penalty_total).max(0) as u8;
 
             if let Some(aggregated) = tb.per_test_aggregated {
                 // The per-test aggregation changed the final score.

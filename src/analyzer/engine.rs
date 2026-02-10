@@ -410,9 +410,9 @@ impl AnalysisEngine {
                 if !has_source {
                     const NO_SOURCE_BASELINE: u32 = 15;
                     const MAX_CATEGORY: u32 = 25;
-                    breakdown_t.error_coverage =
-                        ((breakdown_t.error_coverage as u32 * NO_SOURCE_BASELINE) / MAX_CATEGORY)
-                            as u8;
+                    breakdown_t.error_coverage = ((breakdown_t.error_coverage as u32
+                        * NO_SOURCE_BASELINE)
+                        / MAX_CATEGORY) as u8;
                     breakdown_t.boundary_conditions = ((breakdown_t.boundary_conditions as u32
                         * NO_SOURCE_BASELINE)
                         / MAX_CATEGORY) as u8;
