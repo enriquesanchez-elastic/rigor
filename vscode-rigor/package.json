@@ -2,7 +2,7 @@
   "name": "rigor",
   "displayName": "Rigor",
   "description": "Test quality analysis for TypeScript - inline diagnostics from Rigor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "rigor",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Linters", "Testing"],
