@@ -3,10 +3,10 @@ members = ["rigor-lsp"]
 
 [package]
 name = "rigor"
-version = "1.0.1"
+version = "1.0.3"
 edition = "2021"
 description = "Test Quality Analyzer for TypeScript"
-authors = ["Rigor Team"]
+authors = ["Enrique Sanchez"]
 
 [dependencies]
 tree-sitter = "0.26"
