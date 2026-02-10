@@ -112,11 +112,10 @@ impl<'a> FrameworkDetector<'a> {
             return TestFramework::Mocha;
         }
 
-        // Default: If we see expect(), assume Jest (most common)
-        if source_lower.contains("expect(") {
-            return TestFramework::Jest;
-        }
-
+        // If we only see expect() with no framework-specific patterns,
+        // return Unknown rather than guessing Jest. Playwright, Vitest, Chai,
+        // and many other frameworks also use expect(). Guessing Jest can cause
+        // Jest-specific rules to fire incorrectly on non-Jest files.
         TestFramework::Unknown
     }
 
@@ -261,6 +260,29 @@ mod tests {
         let detector = FrameworkDetector::new(source);
 
         assert_eq!(detector.detect(&tree), TestFramework::Cypress);
+    }
+
+    #[test]
+    fn test_bare_expect_returns_unknown_not_jest() {
+        // Regression: a file with only expect() should not be assumed Jest.
+        // Playwright, Vitest, Chai, etc. also use expect().
+        let source = r#"
+            describe('suite', () => {
+                it('works', () => {
+                    expect(1 + 1).toBe(2);
+                });
+            });
+        "#;
+
+        let mut parser = TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let detector = FrameworkDetector::new(source);
+
+        assert_eq!(
+            detector.detect(&tree),
+            TestFramework::Unknown,
+            "bare expect() without framework markers should be Unknown, not Jest"
+        );
     }
 
     #[test]

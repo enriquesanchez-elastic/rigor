@@ -49,13 +49,18 @@ fn syntax_error_handled_gracefully() {
     file.write_all(b"function {{{ broken").unwrap();
     file.flush().unwrap();
     let result = analyze_path(file.path());
-    match &result {
-        Ok(r) => assert_eq!(
-            r.stats.total_tests, 0,
-            "syntax error file should report 0 tests when parsed"
-        ),
-        Err(_) => {}
-    }
+    // tree-sitter is error-tolerant: syntax errors should still parse and return Ok with 0 tests.
+    // If this behavior changes, this test will catch it.
+    assert!(
+        result.is_ok(),
+        "syntax error file should return Ok (tree-sitter is error-tolerant), got Err: {:?}",
+        result.err()
+    );
+    let r = result.unwrap();
+    assert_eq!(
+        r.stats.total_tests, 0,
+        "syntax error file should report 0 tests"
+    );
 }
 
 #[test]

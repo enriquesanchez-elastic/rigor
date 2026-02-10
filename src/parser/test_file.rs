@@ -247,7 +247,10 @@ impl<'a> TestFileParser<'a> {
             let property = function.child_by_field_name("property")?;
             let prop_name = self.node_text(property);
 
-            if prop_name == "should" {
+            // Cypress .should() and .and() are both assertion methods.
+            // .and() is an alias for .should() — e.g.
+            //   cy.get('.btn').should('be.visible').and('be.enabled')
+            if prop_name == "should" || prop_name == "and" {
                 let args = node.child_by_field_name("arguments")?;
                 let mut cursor = args.walk();
                 let first_arg = args.named_children(&mut cursor).next()?;
@@ -350,11 +353,12 @@ impl<'a> TestFileParser<'a> {
 
     /// Check if any parent/sibling in the chain has a .should() call
     fn has_should_in_chain(&self, node: Node) -> bool {
-        // Walk up to find if we're part of a longer chain that includes .should()
+        // Walk up to find if we're part of a longer chain that includes .should() or .and()
         if let Some(parent) = node.parent() {
             if parent.kind() == "member_expression" {
                 if let Some(property) = parent.child_by_field_name("property") {
-                    if self.node_text(property) == "should" {
+                    let prop = self.node_text(property);
+                    if prop == "should" || prop == "and" {
                         return true;
                     }
                 }

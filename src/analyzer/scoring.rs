@@ -1,8 +1,8 @@
 //! Score calculation for test quality
 //!
-//! ## Scoring v2: No double-counting
-//! With `scoring_version: "v2"` in config, each issue affects exactly one of:
-//! - **Category score** (via the five category rules' `calculate_score`): WeakAssertion, NoAssertions,
+//! ## Scoring model: No double-counting
+//! Each issue affects exactly one of:
+//! - **Category score** (via the six category rules' `calculate_score`): WeakAssertion, NoAssertions,
 //!   MissingErrorTest, MissingBoundaryTest, SharedState, HardcodedValues, LimitedInputVariety,
 //!   DuplicateTest, TrivialAssertion, AssertionIntentMismatch, MutationResistant, BoundarySpecificity,
 //!   StateVerification, ReturnPathCoverage, BehavioralCompleteness, SideEffectNotVerified.
@@ -21,11 +21,32 @@ use super::rules::{
 };
 
 /// Penalty points per issue by severity (applied after category score).
-/// Ensures files with many reported problems cannot get A/B.
-const PENALTY_PER_ERROR: i32 = 5;
-const PENALTY_PER_WARNING: i32 = 2;
+///
+/// These penalties apply only to "penalty-only" issues — rules whose impact is NOT already
+/// captured by a category score (e.g. DebugCode, FocusedTest, FlakyPattern, VagueTestName).
+/// Category-affecting rules (WeakAssertion, MissingErrorTest, etc.) reduce the category
+/// score directly and are NOT double-counted here.
+///
+/// ## Rationale for values
+/// - **PENALTY_PER_ERROR (7):** Errors like focused tests or debug code in CI are serious
+///   code hygiene issues that should noticeably drop the score.
+/// - **PENALTY_PER_WARNING (3):** Warnings like vague test names hurt readability but are
+///   less severe than errors.
+/// - **PENALTY_PER_INFO (1):** Informational suggestions are low-severity nudges.
+///
+/// ## Rationale for caps
+/// - **MAX_PENALTY_FROM_ERRORS (50):** Beyond ~7 errors the file is already an F; further
+///   penalties don't provide signal but the cap prevents a single category from dominating.
+/// - **MAX_PENALTY_FROM_WARNINGS (40):** Generous cap to ensure files with many warnings
+///   (e.g. 15+ vague test names) are penalized substantially.
+/// - **MAX_PENALTY_FROM_INFO (15):** Info issues are low-severity; cap prevents them from
+///   overwhelming the score.
+///
+/// Total maximum penalty: 105 (enough to bring a perfect 100 well below zero, clamped to 0).
+const PENALTY_PER_ERROR: i32 = 7;
+const PENALTY_PER_WARNING: i32 = 3;
 const PENALTY_PER_INFO: i32 = 1;
-const MAX_PENALTY_FROM_ERRORS: i32 = 35;
+const MAX_PENALTY_FROM_ERRORS: i32 = 50;
 const MAX_PENALTY_FROM_WARNINGS: i32 = 40;
 const MAX_PENALTY_FROM_INFO: i32 = 15;
 
@@ -46,37 +67,11 @@ impl ScoreCalculator {
         Score::new(total)
     }
 
-    /// Apply issue-based penalty so that files with many problems get lower grades.
-    /// Errors and warnings (trivial assertions, debug code, flaky patterns, etc.)
-    /// now directly reduce the final score.
-    /// (v1: all issues count toward penalty.)
-    pub fn apply_issue_penalty(score: Score, issues: &[Issue]) -> Score {
-        let errors = issues
-            .iter()
-            .filter(|i| i.severity == Severity::Error)
-            .count() as i32;
-        let warnings = issues
-            .iter()
-            .filter(|i| i.severity == Severity::Warning)
-            .count() as i32;
-        let infos = issues
-            .iter()
-            .filter(|i| i.severity == Severity::Info)
-            .count() as i32;
-
-        let penalty = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS)
-            + (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS)
-            + (infos * PENALTY_PER_INFO).min(MAX_PENALTY_FROM_INFO);
-
-        let value = (score.value as i32 - penalty).clamp(0, 100) as u8;
-        Score::new(value)
-    }
-
-    /// Apply issue-based penalty (v2: no double-counting).
+    /// Apply issue-based penalty (no double-counting).
     /// Only issues that do NOT affect a category score (e.g. DebugCode, FocusedTest)
     /// are counted here. Issues that reduce a category (e.g. WeakAssertion, MissingErrorTest)
-    /// are not penalized again.
-    pub fn apply_issue_penalty_v2(score: Score, issues: &[Issue]) -> Score {
+    /// have already been reflected in the category score and are not penalized again.
+    pub fn apply_issue_penalty(score: Score, issues: &[Issue]) -> Score {
         let (errors, warnings, infos) = issues.iter().fold((0i32, 0i32, 0i32), |acc, i| {
             if rule_scoring_category(&i.rule).is_some() {
                 acc
@@ -133,12 +128,11 @@ impl ScoreCalculator {
     }
 
     /// Build full transparent breakdown: category scores, weights, and penalties.
-    /// When `scoring_v2` is true, penalty counts only issues that do not affect a category (no double-counting).
+    /// Penalty counts only issues that do not affect a category (no double-counting).
     pub fn build_transparent_breakdown(
         breakdown: &ScoreBreakdown,
         issues: &[Issue],
         test_type: TestType,
-        scoring_v2: bool,
     ) -> TransparentBreakdown {
         let weights = ScoringWeights::for_test_type(test_type);
         let categories = [
@@ -187,34 +181,18 @@ impl ScoreCalculator {
 
         let total_before_penalties = weights.calculate_total(breakdown);
 
-        let (errors, warnings, infos) = if scoring_v2 {
-            issues.iter().fold((0i32, 0i32, 0i32), |acc, i| {
-                if rule_scoring_category(&i.rule).is_some() {
-                    acc
-                } else {
-                    match i.severity {
-                        Severity::Error => (acc.0 + 1, acc.1, acc.2),
-                        Severity::Warning => (acc.0, acc.1 + 1, acc.2),
-                        Severity::Info => (acc.0, acc.1, acc.2 + 1),
-                    }
+        // Only count penalty-only issues (not category issues) to avoid double-counting
+        let (errors, warnings, infos) = issues.iter().fold((0i32, 0i32, 0i32), |acc, i| {
+            if rule_scoring_category(&i.rule).is_some() {
+                acc
+            } else {
+                match i.severity {
+                    Severity::Error => (acc.0 + 1, acc.1, acc.2),
+                    Severity::Warning => (acc.0, acc.1 + 1, acc.2),
+                    Severity::Info => (acc.0, acc.1, acc.2 + 1),
                 }
-            })
-        } else {
-            (
-                issues
-                    .iter()
-                    .filter(|i| i.severity == Severity::Error)
-                    .count() as i32,
-                issues
-                    .iter()
-                    .filter(|i| i.severity == Severity::Warning)
-                    .count() as i32,
-                issues
-                    .iter()
-                    .filter(|i| i.severity == Severity::Info)
-                    .count() as i32,
-            )
-        };
+            }
+        });
 
         let penalty_from_errors = (errors * PENALTY_PER_ERROR).min(MAX_PENALTY_FROM_ERRORS);
         let penalty_from_warnings = (warnings * PENALTY_PER_WARNING).min(MAX_PENALTY_FROM_WARNINGS);
@@ -231,6 +209,7 @@ impl ScoreCalculator {
             penalty_from_warnings,
             penalty_from_info,
             final_score,
+            per_test_aggregated: None, // Set by engine when per-test aggregation changes the score
         }
     }
 
@@ -428,39 +407,40 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_issue_penalty_errors_reduce_score() {
-        let score = Score::new(90);
-        let issues = vec![
-            Issue {
-                rule: crate::Rule::WeakAssertion,
-                severity: Severity::Error,
-                message: "error1".to_string(),
-                location: Location::new(1, 1),
-                suggestion: None,
-                fix: None,
-            },
-            Issue {
-                rule: crate::Rule::WeakAssertion,
-                severity: Severity::Error,
-                message: "error2".to_string(),
-                location: Location::new(2, 1),
-                suggestion: None,
-                fix: None,
-            },
-        ];
-        let result = ScoreCalculator::apply_issue_penalty(score, &issues);
-        // 2 errors * 5 = 10 penalty, 90 - 10 = 80
-        assert_eq!(result.value, 80);
-        assert_eq!(result.grade, Grade::B);
+    fn test_apply_issue_penalty_only_counts_non_category_issues() {
+        // WeakAssertion is a category issue — should NOT be penalized again
+        let category_issues = vec![Issue {
+            rule: crate::Rule::WeakAssertion,
+            severity: Severity::Error,
+            message: "error1".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+            fix: None,
+        }];
+        let result = ScoreCalculator::apply_issue_penalty(Score::new(90), &category_issues);
+        assert_eq!(result.value, 90, "category issues should not add penalty");
+
+        // DebugCode is penalty-only — should be penalized
+        let penalty_issues = vec![Issue {
+            rule: crate::Rule::DebugCode,
+            severity: Severity::Error,
+            message: "debug".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+            fix: None,
+        }];
+        let result = ScoreCalculator::apply_issue_penalty(Score::new(90), &penalty_issues);
+        // 1 error * 7 = 7 penalty, 90 - 7 = 83
+        assert_eq!(result.value, 83, "penalty-only issues should reduce score");
     }
 
     #[test]
     fn test_apply_issue_penalty_clamped_to_zero() {
         let score = Score::new(10);
-        // 7 errors * 5 = 35 (capped), penalty 35 > score 10 → clamps to 0
-        let issues: Vec<Issue> = (0..7)
+        // 8 penalty-only errors * 7 = 56, capped at 50, penalty 50 > score 10 → clamps to 0
+        let issues: Vec<Issue> = (0..8)
             .map(|i| Issue {
-                rule: crate::Rule::NoAssertions,
+                rule: crate::Rule::DebugCode,
                 severity: Severity::Error,
                 message: format!("err{}", i),
                 location: Location::new(i + 1, 1),
@@ -476,9 +456,10 @@ mod tests {
     #[test]
     fn test_apply_issue_penalty_mixed_severities() {
         let score = Score::new(95);
+        // Only penalty-only rules count: DebugCode, FocusedTest, VagueTestName
         let issues = vec![
             Issue {
-                rule: crate::Rule::WeakAssertion,
+                rule: crate::Rule::DebugCode,
                 severity: Severity::Error,
                 message: "e".to_string(),
                 location: Location::new(1, 1),
@@ -494,7 +475,7 @@ mod tests {
                 fix: None,
             },
             Issue {
-                rule: crate::Rule::HardcodedValues,
+                rule: crate::Rule::FocusedTest,
                 severity: Severity::Info,
                 message: "i".to_string(),
                 location: Location::new(3, 1),
@@ -503,8 +484,8 @@ mod tests {
             },
         ];
         let result = ScoreCalculator::apply_issue_penalty(score, &issues);
-        // 1*5 + 1*2 + 1*1 = 8 penalty, 95 - 8 = 87
-        assert_eq!(result.value, 87);
+        // 1*7 + 1*3 + 1*1 = 11 penalty, 95 - 11 = 84
+        assert_eq!(result.value, 84);
         assert_eq!(result.grade, Grade::B);
     }
 
@@ -594,24 +575,25 @@ mod tests {
                 fix: None,
             },
         ];
-        let tb = ScoreCalculator::build_transparent_breakdown(
-            &breakdown,
-            &issues,
-            TestType::Unit,
-            false,
-        );
+        let tb = ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit);
         assert_eq!(tb.categories.len(), 6);
         assert_eq!(
             tb.final_score as i32,
             tb.total_before_penalties as i32 - tb.penalty_total
         );
-        assert!(tb.penalty_total > 0);
-        assert!(tb.penalty_from_errors > 0);
-        assert!(tb.penalty_from_warnings > 0);
+        // Only DebugCode (penalty-only) should count; WeakAssertion is category-based
+        assert!(
+            tb.penalty_from_errors > 0,
+            "DebugCode error should add penalty"
+        );
+        assert_eq!(
+            tb.penalty_from_warnings, 0,
+            "WeakAssertion warning is category-only, no penalty"
+        );
     }
 
     #[test]
-    fn test_v2_no_penalty_for_category_issues() {
+    fn test_no_penalty_for_category_issues() {
         let breakdown = ScoreBreakdown {
             assertion_quality: 20,
             error_coverage: 25,
@@ -629,20 +611,16 @@ mod tests {
             fix: None,
         }];
         let score_before = ScoreCalculator::calculate_weighted(&breakdown, TestType::Unit);
-        let score_v1 = ScoreCalculator::apply_issue_penalty(score_before.clone(), &issues);
-        let score_v2 = ScoreCalculator::apply_issue_penalty_v2(score_before, &issues);
-        assert!(
-            score_v2.value > score_v1.value,
-            "v2 should not penalize category-only issue"
-        );
-        let tb =
-            ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit, true);
+        let score_after = ScoreCalculator::apply_issue_penalty(score_before, &issues);
+        // Category-only issue should not add any penalty
+        let tb = ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit);
         assert_eq!(tb.penalty_from_warnings, 0);
         assert_eq!(tb.penalty_total, 0);
+        assert_eq!(score_after.value as i32, tb.final_score as i32);
     }
 
     #[test]
-    fn test_v2_penalty_for_penalty_only_issues() {
+    fn test_penalty_for_penalty_only_issues() {
         let breakdown = ScoreBreakdown {
             assertion_quality: 25,
             error_coverage: 25,
@@ -670,10 +648,9 @@ mod tests {
             },
         ];
         let score_before = ScoreCalculator::calculate_weighted(&breakdown, TestType::Unit);
-        let score_v2 = ScoreCalculator::apply_issue_penalty_v2(score_before, &issues);
-        let tb =
-            ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit, true);
+        let score_after = ScoreCalculator::apply_issue_penalty(score_before, &issues);
+        let tb = ScoreCalculator::build_transparent_breakdown(&breakdown, &issues, TestType::Unit);
         assert!(tb.penalty_total > 0);
-        assert_eq!(score_v2.value as i32, tb.final_score as i32);
+        assert_eq!(score_after.value as i32, tb.final_score as i32);
     }
 }

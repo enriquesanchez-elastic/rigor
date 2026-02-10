@@ -137,11 +137,6 @@ pub struct Config {
     /// Per-path configuration overrides (for monorepos, legacy code, etc.)
     #[serde(default)]
     pub overrides: Vec<ConfigOverride>,
-
-    /// Scoring algorithm version: "v1" (default) or "v2".
-    /// v2: no double-counting — issues that affect a category score do not also add penalty.
-    #[serde(default)]
-    pub scoring_version: Option<String>,
 }
 
 impl Default for Config {
@@ -156,7 +151,6 @@ impl Default for Config {
             test_patterns: Vec::new(),
             test_root: None,
             overrides: Vec::new(),
-            scoring_version: None,
         }
     }
 }
@@ -277,10 +271,6 @@ impl Config {
         let mut all_overrides = base.overrides;
         all_overrides.append(&mut self.overrides);
         self.overrides = all_overrides;
-
-        if self.scoring_version.is_none() {
-            self.scoring_version = base.scoring_version;
-        }
     }
 
     /// Get default test file patterns

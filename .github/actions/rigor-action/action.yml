@@ -2,7 +2,7 @@ name: "Rigor"
 description: "Run Rigor test quality analysis and post PR comment with score and issues"
 inputs:
   rigor-version:
-    description: "Rigor version (e.g. 0.5.0) for npm install"
+    description: "Rigor version (e.g. 1.0.0) for npm install"
     required: false
     default: "latest"
   comment-threshold:
@@ -20,22 +20,46 @@ runs:
       shell: bash
       run: |
         if command -v rigor >/dev/null 2>&1; then
-          echo "Rigor on PATH"
+          echo "rigor: already on PATH ($(rigor --version))"
         else
-          npm install -g "rigor-cli@${INPUT_RIGOR_VERSION}" 2>/dev/null || true
+          echo "rigor: installing via npm..."
+          npm install -g "rigor-cli@${{ inputs.rigor-version }}"
         fi
+        # Verify the binary actually works
+        rigor --version
 
     - name: Run Rigor (JSON)
       id: rigor
       shell: bash
       run: |
-        rigor --json --changed > rigor-output.json 2>/dev/null || echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
+        # Run analysis; exit code 1 = threshold failure (expected), other = real error
+        set +e
+        rigor --json --changed > rigor-output.json 2>&1
+        EXIT_CODE=$?
+        set -e
+
+        if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 1 ]; then
+          echo "rigor: analysis completed (exit $EXIT_CODE)"
+        else
+          echo "::error::Rigor analysis failed with exit code $EXIT_CODE"
+          cat rigor-output.json || true
+          exit $EXIT_CODE
+        fi
+
+        # Handle "no changed test files" as a known-good state
+        if [ ! -s rigor-output.json ]; then
+          echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
+          echo "rigor: no test files changed"
+        fi
 
     - name: Run Rigor (SARIF)
       if: inputs.upload-sarif == 'true'
       shell: bash
       run: |
-        rigor --sarif --changed > rigor.sarif 2>/dev/null || echo '{"version":"2.1.0","runs":[]}' > rigor.sarif
+        rigor --sarif --changed > rigor.sarif 2>&1 || {
+          echo "::warning::SARIF generation failed; skipping upload"
+          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
+        }
 
     - name: Comment PR with results
       if: github.event_name == 'pull_request'
@@ -58,11 +82,12 @@ runs:
                 body += `- **${r.filePath || r.file_path || '?'}**: ${s}/100 (${g})\n`;
               });
               const avg = summary.averageScore ?? (results.reduce((a, r) => a + (r.score?.value ?? 0), 0) / (results.length || 1));
-              body += `\n**Average score:** ${avg}/100\n`;
+              body += `\n**Average score:** ${Math.round(avg)}/100\n`;
             }
-            body += '\n_Configure: \`.github/actions/rigor-action\` inputs._';
+            body += '\n_Powered by [Rigor](https://github.com/rigor-dev/rigor)_';
           } catch (e) {
-            body += 'Rigor did not produce JSON. Run `rigor --json --changed` locally.\n';
+            body += `⚠️ Rigor output could not be parsed: ${e.message}\n`;
+            body += 'Run `rigor --json --changed` locally to debug.\n';
           }
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
@@ -70,7 +95,6 @@ runs:
             repo: context.repo.repo,
             body
           });
-      continue-on-error: true
 
     - name: Upload SARIF
       if: inputs.upload-sarif == 'true'

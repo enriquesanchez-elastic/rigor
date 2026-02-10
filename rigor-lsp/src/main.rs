@@ -57,7 +57,7 @@ impl LanguageServer for Backend {
                     TextDocumentSyncOptions {
                         open_close: Some(true),
                         change: Some(TextDocumentSyncKind::NONE),
-                        save: Some(TextDocumentSyncSaveOptions::default().into()),
+                        save: Some(TextDocumentSyncSaveOptions::Supported(true).into()),
                         ..Default::default()
                     },
                 )),
@@ -95,13 +95,8 @@ impl LanguageServer for Backend {
             }
         };
 
-        // Only analyze test files
-        let path_str = path.to_string_lossy();
-        if !path_str.contains(".test.")
-            && !path_str.contains(".spec.")
-            && !path_str.ends_with(".cy.ts")
-            && !path_str.ends_with(".cy.tsx")
-        {
+        // Only analyze test files — uses the shared detection from the rigor crate
+        if !rigor::watcher::TestWatcher::is_test_file(&path) {
             return;
         }
 
@@ -123,10 +118,11 @@ impl LanguageServer for Backend {
                     .await;
             }
             Err(e) => {
+                // Show error to user instead of silently clearing diagnostics
                 self.client
-                    .log_message(MessageType::ERROR, format!("Rigor analysis failed: {}", e))
+                    .show_message(MessageType::ERROR, format!("Rigor analysis failed: {}", e))
                     .await;
-                self.client.publish_diagnostics(uri, vec![], None).await;
+                // Keep existing diagnostics rather than clearing them on error
             }
         }
     }

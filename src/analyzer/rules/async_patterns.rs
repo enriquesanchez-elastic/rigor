@@ -65,11 +65,11 @@ impl AnalysisRule for AsyncPatternsRule {
             if !test.is_async || test.is_skipped {
                 continue;
             }
-            // We don't have the test body text easily - we'd need to get the source range for the test.
-            // Skip this check for now or do a simple scan: in the lines between test.location.line and test.location.end_line,
-            // check for "await ". If async test and no await in that range, warn.
+            // Scan the source lines between test start and end for "await ".
+            // If end_line is unknown, only scan the start line — never guess a
+            // 49-line range, which would misattribute issues from other tests.
             let start = test.location.line.saturating_sub(1);
-            let end_line = test.location.end_line.unwrap_or(test.location.line + 49);
+            let end_line = test.location.end_line.unwrap_or(test.location.line);
             let line_count = end_line.saturating_sub(test.location.line) + 1;
             let test_lines: Vec<&str> = source.lines().skip(start).take(line_count).collect();
             let has_await = test_lines.iter().any(|l| {

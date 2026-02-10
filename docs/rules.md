@@ -1,6 +1,6 @@
 # Rules Reference
 
-Rigor includes 34 active rules across several categories. Ten Phase 2.2 rules (test-complexity, implementation-coupling, vacuous-test, incomplete-mock-verification, async-error-mishandling, redundant-test, unreachable-test-code, excessive-setup, type-assertion-abuse, missing-cleanup) are planned but not yet implemented and are excluded from scoring.
+Rigor includes 34 active rules across several categories. Ten Phase 2.2 rules are in various stages of implementation — see the [Planned Rules](#planned-rules) section below for current status. Rules that are not yet fully implemented are excluded from scoring.
 
 ## Assertion Quality
 
@@ -98,7 +98,29 @@ Set severity per rule in `.rigorrc.json`:
 ```
 
 Severities:
-- `error` - 5 points penalty each (max 35 total)
-- `warning` - 2 points penalty each (max 40 total)
+- `error` - 7 points penalty each (max 50 total)
+- `warning` - 3 points penalty each (max 40 total)
 - `info` - 1 point penalty each (max 15 total)
 - `off` - Disabled
+
+> **Note:** Penalties apply only to "penalty-only" rules (e.g. `debug-code`, `focused-test`,
+> `vague-test-name`). Category-affecting rules (e.g. `weak-assertion`, `missing-error-test`)
+> reduce the category score directly and are not double-counted as penalties.
+
+## Planned Rules
+
+The following rules have stubs in the codebase but are not yet fully implemented. They are
+excluded from scoring until their detection logic is complete.
+
+| Rule | Category | Status |
+|------|----------|--------|
+| `test-complexity` | Maintainability | Stub |
+| `implementation-coupling` | Design | Stub |
+| `vacuous-test` | Correctness | Partial |
+| `incomplete-mock-verification` | Correctness | Stub |
+| `async-error-mishandling` | Correctness | Stub |
+| `redundant-test` | Efficiency | Stub |
+| `unreachable-test-code` | Correctness | Stub |
+| `excessive-setup` | Design | Stub |
+| `type-assertion-abuse` | TypeScript | Stub |
+| `missing-cleanup` | Reliability | Stub |

@@ -1,16 +1,18 @@
 # Rigor
 
-**Fast test quality linting for TypeScript.** Analyzes your tests with static analysis and returns a score (0–100) with actionable issues. No test execution required.
+**Fast test quality linting for TypeScript.** Analyzes your tests with static analysis and returns a score (0–100) with actionable issues. No test execution required. Works with Jest, Vitest, Playwright, Cypress, and Mocha.
 
 ## Why Rigor?
 
-| | Rigor | Stryker / PIT / mutmut |
-|--|-------|------------------------|
-| **Speed** | ~50–100ms per file | Minutes (runs full test suite per mutant) |
-| **Runs tests?** | No | Yes |
-| **Best for** | Fast feedback, CI gates, pre-commit | Deep validation of test effectiveness |
+| | Rigor | Stryker / PIT / mutmut | eslint-plugin-jest |
+|--|-------|------------------------|--------------------|
+| **Speed** | ~50–100ms per file | Minutes (runs full test suite per mutant) | Fast |
+| **Runs tests?** | No | Yes | No |
+| **Single quality score** | Yes (0–100, 6 categories) | Kill rate only | No |
+| **AI-native (MCP)** | Yes (9 tools) | No | No |
+| **Best for** | Fast feedback, CI gates, AI workflows | Deep mutation validation | Basic lint rules |
 
-Rigor is a **test linter**, not mutation testing. Use it for instant feedback; use Stryker when you need to verify tests actually kill mutants.
+Rigor is a **test quality linter** — it scores your tests across assertion quality, error coverage, boundary conditions, test isolation, input variety, and AI smells. Use it for instant feedback in editors, CI, and AI pipelines; use Stryker when you need to verify tests actually kill mutants.
 
 ## Installation
 
@@ -61,10 +63,12 @@ rigor src/ --watch
 | **Error Coverage** | Functions that throw but lack error tests |
 | **Boundary Conditions** | Numeric comparisons without boundary tests |
 | **Test Isolation** | Shared mutable state, missing `beforeEach` |
+| **Input Variety** | Hardcoded values, single-case tests |
+| **AI Smells** | Tautological assertions, over-mocking, happy-path-only, parrot assertions |
 | **Flaky Patterns** | `Date.now()`, `Math.random()`, unmocked fetch |
 | **React Testing Library** | `querySelector` vs `getByRole`, `fireEvent` vs `userEvent` |
 
-See [docs/rules.md](docs/rules.md) for the full list of 34 rules.
+See [docs/rules.md](docs/rules.md) for the full list of 38+ rules.
 
 ## Output
 
@@ -89,7 +93,45 @@ See [docs/rules.md](docs/rules.md) for the full list of 34 rules.
 | D | 60-69 | Poor |
 | F | 0-59 | Needs work |
 
-Score is based on six categories (assertion quality, error coverage, boundary conditions, test isolation, input variety, AI smells) minus penalties for issues found. See [docs/scoring.md](docs/scoring.md) for details.
+Score is based on six categories (assertion quality, error coverage, boundary conditions, test isolation, input variety, AI smells) minus penalties for issues found. The breakdown is fully transparent — every point is traceable. See [docs/scoring.md](docs/scoring.md) for details.
+
+## AI Integration (MCP)
+
+Rigor ships with a Model Context Protocol (MCP) server exposing 9 tools for AI assistants:
+
+```bash
+rigor mcp
+```
+
+| Tool | Description |
+|------|-------------|
+| `analyze_test_quality` | Analyze a test file and return score + issues |
+| `suggest_improvements` | Generate an AI prompt to improve a test file |
+| `get_mutation_score` | Run fast mutation testing on a test file |
+| `analyze_with_source` | Analyze test with source file context |
+| `get_improvement_plan` | Prioritized action plan by severity |
+| `explain_rule` | Explain a rule with good/bad examples |
+| `iterate_improvement` | Track improvement across iterations |
+| `get_test_template` | Generate test template from source exports |
+| `compare_tests` | Compare two test files |
+
+Works with Cursor, Continue, Cline, and any MCP-compatible tool. See [docs/mcp-integration.md](docs/mcp-integration.md).
+
+## Programmatic API
+
+```bash
+# Analyze from stdin
+echo 'test source...' | rigor --stdin --stdin-filename test.test.ts --json
+```
+
+Node.js SDK (`@rigor/sdk`):
+```typescript
+import { analyzeFile, analyzeSource } from '@rigor/sdk';
+const result = await analyzeFile('src/auth.test.ts');
+console.log(result.score, result.issues);
+```
+
+See [docs/api.md](docs/api.md) for the full API reference.
 
 ## Configuration
 
@@ -181,13 +223,26 @@ cargo llvm-cov report --html             # open target/llvm-cov/html/index.html
 
 CI runs coverage on every push; the lcov report is uploaded as a workflow artifact.
 
+## Editor Integration
+
+### VS Code
+
+Install the `vscode-rigor` extension for inline diagnostics powered by the `rigor-lsp` language server. Diagnostics appear on save for all test files (`.test.ts`, `.spec.ts`, `.cy.ts`).
+
+### LSP
+
+The `rigor-lsp` binary works with any LSP-compatible editor (Neovim, Helix, etc.).
+
 ## Documentation
 
 - [Configuration](docs/configuration.md) - All config options, extends, overrides
-- [Rules Reference](docs/rules.md) - All 34 rules with descriptions
+- [Rules Reference](docs/rules.md) - All 38+ rules with descriptions
 - [Scoring](docs/scoring.md) - How scores are calculated
+- [API Reference](docs/api.md) - JSON contract, stdin, Rust API, Node.js SDK
+- [MCP Integration](docs/mcp-integration.md) - Setup for Cursor, Continue, Cline
 - [Mutation Testing](docs/mutation-testing.md) - Operators and usage
 - [CI Integration](docs/ci-integration.md) - GitHub Actions, pre-commit, SARIF
+- [Roadmap](docs/roadmap.md) - Strategic roadmap through Phase 5
 - [Troubleshooting](docs/troubleshooting.md) - Common issues
 
 ## License

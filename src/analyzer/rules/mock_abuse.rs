@@ -128,8 +128,21 @@ impl AnalysisRule for MockAbuseRule {
         let mocked = Self::mocked_modules(source);
         for (line_no, module) in &mocked {
             let mod_trimmed = module.trim_matches(|c| c == '\'' || c == '"');
+            // Extract the final segment of the module path for matching.
+            // e.g. '../UserMap' → 'UserMap', 'fs' → 'fs', 'Map' → 'Map'
+            // This prevents false positives like 'UserMap' matching 'Map'.
+            let final_segment = mod_trimmed
+                .rsplit('/')
+                .next()
+                .unwrap_or(mod_trimmed)
+                .trim_end_matches(".ts")
+                .trim_end_matches(".tsx")
+                .trim_end_matches(".js")
+                .trim_end_matches(".jsx");
+
             for std_name in STD_MOCKS {
-                if mod_trimmed.contains(std_name) && mod_trimmed.len() < 30 {
+                // Exact match on the final path segment — not substring contains
+                if final_segment == *std_name {
                     issues.push(Issue {
                         rule: Rule::MockAbuse,
                         severity: Severity::Warning,
@@ -198,6 +211,37 @@ mod tests {
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));
+    }
+
+    #[test]
+    fn negative_user_map_does_not_match_map() {
+        // Regression: jest.mock('../UserMap') must NOT match the built-in 'Map'
+        let rule = MockAbuseRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "jest.mock('../services/UserMap');";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(
+            issues.is_empty(),
+            "UserMap should not trigger std-lib mock warning for 'Map'"
+        );
+    }
+
+    #[test]
+    fn negative_map_service_does_not_match_map() {
+        let rule = MockAbuseRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let source = "jest.mock('./MapService');";
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(
+            issues.is_empty(),
+            "MapService should not trigger std-lib mock warning for 'Map'"
+        );
     }
 
     #[test]
