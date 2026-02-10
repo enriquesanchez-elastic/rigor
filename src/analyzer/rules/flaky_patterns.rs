@@ -166,13 +166,28 @@ impl AnalysisRule for FlakyPatternsRule {
                 });
             }
 
-            // setTimeout/setInterval with literal delay (potential race)
+            // setTimeout/setInterval without fake timers — timing-dependent code is flaky.
+            // Only flag when there's a numeric delay argument (regex-free: look for
+            // a comma followed by digits, e.g. `setTimeout(fn, 1000)`).
             if (trimmed.contains("setTimeout(") || trimmed.contains("setInterval("))
                 && !has_fake_timers
             {
-                // Only flag if there's a numeric literal (e.g. setTimeout(..., 1000))
-                let has_literal_delay = trimmed.matches(char::is_numeric).count() >= 1;
-                if has_literal_delay {
+                // Check for an actual numeric delay: comma, optional whitespace, digits
+                let call_start = trimmed
+                    .find("setTimeout(")
+                    .or_else(|| trimmed.find("setInterval("));
+                let has_numeric_delay = call_start
+                    .and_then(|start| {
+                        // Scan the argument list after the opening paren
+                        let args = &trimmed[start..];
+                        let comma_pos = args.find(',')?;
+                        let after_comma = args[comma_pos + 1..].trim_start();
+                        // Check if the next non-whitespace chars are digits
+                        Some(after_comma.starts_with(|c: char| c.is_ascii_digit()))
+                    })
+                    .unwrap_or(false);
+
+                if has_numeric_delay {
                     let col = line
                         .find("setTimeout")
                         .or_else(|| line.find("setInterval"))

@@ -124,12 +124,41 @@ impl ConsoleReporter {
                     cat.weighted_contribution
                 );
             }
-            println!(
-                "   {} before penalties, −{} penalty → {}",
-                tb.total_before_penalties.to_string().dimmed(),
-                tb.penalty_total.to_string().dimmed(),
-                tb.final_score.to_string().bold()
-            );
+            let after_penalty =
+                (tb.total_before_penalties as i32 - tb.penalty_total).max(0) as u8;
+
+            if let Some(aggregated) = tb.per_test_aggregated {
+                // The per-test aggregation changed the final score.
+                // Show the full pipeline so the math adds up for the user.
+                println!(
+                    "   {} before penalties, −{} penalty → {}",
+                    tb.total_before_penalties.to_string().dimmed(),
+                    tb.penalty_total.to_string().dimmed(),
+                    after_penalty.to_string().dimmed(),
+                );
+                if aggregated < after_penalty {
+                    // Per-test average pulled score DOWN (e.g. no-assertion floors)
+                    println!(
+                        "   per-test average {} → final {}",
+                        aggregated.to_string().dimmed(),
+                        tb.final_score.to_string().bold()
+                    );
+                } else {
+                    // Per-test average was higher, capped by breakdown score
+                    println!(
+                        "   per-test average {} capped by breakdown → final {}",
+                        aggregated.to_string().dimmed(),
+                        tb.final_score.to_string().bold()
+                    );
+                }
+            } else {
+                println!(
+                    "   {} before penalties, −{} penalty → {}",
+                    tb.total_before_penalties.to_string().dimmed(),
+                    tb.penalty_total.to_string().dimmed(),
+                    tb.final_score.to_string().bold()
+                );
+            }
         } else {
             let categories = [
                 ("Assertion Quality", result.breakdown.assertion_quality),

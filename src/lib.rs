@@ -134,6 +134,11 @@ pub struct TransparentBreakdown {
     pub penalty_from_info: i32,
     /// Final score after penalties (0-100)
     pub final_score: u8,
+    /// When the final score differs from (total_before_penalties - penalty_total)
+    /// due to per-test aggregation, this holds the aggregated per-test average.
+    /// Displayed as an extra line in the console output to explain the math.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_test_aggregated: Option<u8>,
 }
 
 /// Letter grade

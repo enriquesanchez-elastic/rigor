@@ -2,6 +2,54 @@
 
 All notable changes to Rigor will be documented in this file.
 
+## [1.0.1] - 2026-02-10
+
+### Highlights
+
+Post-release hardening cycle addressing scoring credibility, false-positive reduction, and infrastructure reliability. All 355 tests pass.
+
+---
+
+### Scoring Calibration
+
+- **Removed scoring v1** — the old double-counting algorithm has been completely removed; v2 (no double-counting) is now the only scoring path
+- **Fixed "no source = free points"** — when source file is unavailable, source-dependent categories (error coverage, boundary conditions) now use proportional scaling (`score × 15/25`) instead of awarding full marks, preserving issue deductions
+- **Added no-assertion test floor** — tests with zero assertions are capped at 30/F regardless of other signals
+- **Per-test aggregation cap** — file score is now `min(breakdown_score, aggregated_per_test_score)`, preventing inflated per-test averages from overriding poor file-level quality
+- **Per-test display scaling** — individual test scores are proportionally scaled to the file's final score, eliminating confusing disconnects (e.g. "all tests B but file is F")
+- **Transparent breakdown display** — shows the per-test cap step when it changes the final score, with clear arithmetic
+- **Increased penalty constants** — Error: 5→7, Warning: 2→3; max penalty from errors: 35→50
+
+### Heuristic Hardening (False-Positive Reduction)
+
+- **Flaky pattern detection** (`flaky_patterns.rs`) — replaced "line has any digit" heuristic with actual numeric delay argument detection for `setTimeout`/`setInterval`
+- **Mock abuse detection** (`mock_abuse.rs`) — exact match on final module path segment instead of substring `contains()` (fixes `UserMap` falsely matching `Map`)
+- **Framework detection** (`framework.rs`) — bare `expect()` no longer defaults to Jest; returns `Unknown` to prevent framework misattribution
+- **Async test end-line** (`async_patterns.rs`) — removed arbitrary +49 line default; falls back to start line only, preventing issues from being misattributed across distant code
+- **Cypress assertion detection** — `.and()` now recognized as assertion alias for `.should()`
+
+### Bug Fixes
+
+- **npm installer** — `main()` is now async and properly awaits downloads; added `process.exit(1)` on failure
+- **Binary platform map** — npm installer now translates Node.js platform conventions to CI artifact names correctly
+- **GitHub Action** — removed `2>/dev/null`, `|| true`, and `continue-on-error: true` that silently swallowed failures; added `rigor --version` pre-check and graceful "no test files changed" handling
+- **Version alignment** — npm package version updated from 0.1.0 to 1.0.0
+
+### Testing
+
+- **9 new semantic scoring tests** — validate scoring *intent* (e.g. "no-assertions should score below 40", "score ordering matches quality ordering") to prevent future regressions
+- **Edge case tests** — syntax error test now asserts `result.is_ok()` and `total_tests == 0` instead of silently accepting errors
+- **Regression baselines** — all 28 baseline scores updated to match calibrated scoring
+- **New unit tests** — mock abuse negative cases (`UserMap` ≠ `Map`), framework detection (`bare expect ≠ Jest`)
+
+### Infrastructure
+
+- **LSP test detection** — `rigor-lsp` now uses shared `TestWatcher::is_test_file()` instead of inline patterns
+- **Node SDK types** — replaced `unknown` with fully typed TypeScript interfaces
+- **Config schema** — removed deprecated `scoring_version` field
+
+---
+
 ## [1.0.0] - 2026-02-06
 
 ### Highlights
@@ -23,7 +71,10 @@ Six new rules targeting patterns common in AI-generated tests:
 - **Parrot Assertion** — flags vague test names like "works" or "returns value"
 - **Boilerplate Padding** — detects heavy setup with few actual assertions
 
-#### Critical Quality Rules (11 new)
+#### Critical Quality Rules (10 stubs added)
+
+Rule stubs added to the enum and config schema for future implementation. These rules are
+**excluded from scoring** until detection logic is complete:
 
 - **test-complexity** — flags overly complex tests with too many branches or assertions
 - **vacuous-test** — detects tests that always pass regardless of behavior

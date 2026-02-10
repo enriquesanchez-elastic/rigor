@@ -40,7 +40,9 @@ impl TestWatcher {
         })
     }
 
-    /// Check if the path is a test file we care about
+    /// Check if the path is a test file we care about.
+    /// This is the single source of truth for test file detection — used by the CLI,
+    /// LSP, and watcher. Add new patterns here, not elsewhere.
     pub fn is_test_file(p: &Path) -> bool {
         let name = match p.file_name().and_then(|n| n.to_str()) {
             Some(n) => n,
@@ -58,6 +60,11 @@ impl TestWatcher {
             ".test.jsx",
             ".spec.js",
             ".spec.jsx",
+            // Cypress test files
+            ".cy.ts",
+            ".cy.tsx",
+            ".cy.js",
+            ".cy.jsx",
         ]
         .iter()
         .any(|suffix| name.ends_with(suffix))

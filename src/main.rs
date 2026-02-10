@@ -1112,7 +1112,8 @@ fn analyze_files_parallel_cached(
     let had_errors = AtomicBool::new(false);
     let cache_hits = AtomicUsize::new(0);
 
-    // Collect (path, content, result, from_cache) so we can write cache for newly analyzed files
+    // Collect (path, content, result, should_cache). should_cache is true for freshly
+    // analyzed files that need writing to cache, false for cache hits.
     type Item = (PathBuf, String, rigor::AnalysisResult, bool);
     let collected: Vec<Item> = files
         .par_iter()
