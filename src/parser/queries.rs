@@ -28,6 +28,28 @@ pub enum QueryId {
     DebuggerStatement,
     /// it.only / test.only / describe.only (call with .only member)
     FocusedTestOnly,
+    /// jest.mock / vi.mock / jest.spyOn / vi.spyOn (filter by obj/prop in rule)
+    MockCall,
+    /// Date.now() and new Date() (capture @obj @prop for call, @ctor for new)
+    DateNow,
+    /// Math.random()
+    MathRandom,
+    /// setTimeout(...) / setInterval(...)
+    SetTimeoutInterval,
+    /// fetch(...) / axios.get etc (identifier or member_expression)
+    FetchAxiosCall,
+    /// await expect(...) - await_expression with expect call
+    AwaitExpect,
+    /// expect(...) call_expression
+    ExpectCall,
+    /// beforeEach / afterEach / beforeAll / afterAll
+    BeforeAfterHook,
+    /// as any / as unknown - type assertion
+    AsTypeAssertion,
+    /// @ts-ignore / @ts-expect-error in comments (line_comment, block_comment)
+    TsIgnoreComment,
+    /// return_statement / throw_statement
+    ReturnThrowStatement,
 }
 
 /// One capture from a query match: capture name and the node's byte range + text.
@@ -67,6 +89,94 @@ impl QueryCache {
                   function: (member_expression
                     object: (identifier) @obj
                     property: (property_identifier) @prop))
+                "#
+            }
+            QueryId::MockCall => {
+                r#"
+                (call_expression
+                  function: (member_expression
+                    object: (identifier) @obj
+                    property: (property_identifier) @prop)) @call
+                "#
+            }
+            QueryId::DateNow => {
+                // Date.now() and new Date()
+                r#"
+                (call_expression
+                  function: (member_expression
+                    object: (identifier) @obj
+                    property: (property_identifier) @prop))
+                (new_expression
+                  constructor: (identifier) @ctor)
+                "#
+            }
+            QueryId::MathRandom => {
+                r#"
+                (call_expression
+                  function: (member_expression
+                    object: (identifier) @obj
+                    property: (property_identifier) @prop))
+                "#
+            }
+            QueryId::SetTimeoutInterval => {
+                r#"
+                (call_expression
+                  function: (identifier) @fn)
+                "#
+            }
+            QueryId::FetchAxiosCall => {
+                r#"
+                (call_expression
+                  function: (identifier) @fn)
+                (call_expression
+                  function: (member_expression
+                    object: (identifier) @obj
+                    property: (property_identifier) @prop))
+                "#
+            }
+            QueryId::AwaitExpect => {
+                r#"
+                (await_expression
+                  argument: (call_expression
+                    function: (identifier) @fn))
+                (await_expression
+                  argument: (call_expression
+                    function: (member_expression
+                      object: (identifier) @obj
+                      property: (property_identifier) @prop)))
+                "#
+            }
+            QueryId::ExpectCall => {
+                r#"
+                (call_expression
+                  function: (identifier) @fn) @call
+                (call_expression
+                  function: (member_expression
+                    object: (identifier) @obj
+                    property: (property_identifier) @prop)) @call
+                "#
+            }
+            QueryId::BeforeAfterHook => {
+                r#"
+                (call_expression
+                  function: (identifier) @fn) @call
+                "#
+            }
+            QueryId::AsTypeAssertion => {
+                r#"
+                (as_expression) @as_expr
+                "#
+            }
+            QueryId::TsIgnoreComment => {
+                r#"
+                (line_comment) @comment
+                (block_comment) @comment
+                "#
+            }
+            QueryId::ReturnThrowStatement => {
+                r#"
+                (return_statement) @stmt
+                (throw_statement) @stmt
                 "#
             }
         };

@@ -1,6 +1,8 @@
-//! Mock abuse detection - excessive or inappropriate mocking
+//! Mock abuse detection - excessive or inappropriate mocking.
+//! Uses tree-sitter query to find jest.mock/vi.mock and extract module path from AST.
 
 use super::AnalysisRule;
+use crate::parser::{global_query_cache, QueryId, TypeScriptParser};
 use crate::{Issue, Location, Rule, Severity, TestCase};
 use tree_sitter::Tree;
 
@@ -29,68 +31,25 @@ impl MockAbuseRule {
         Self
     }
 
-    /// Count jest.mock() / vi.mock() calls in source
-    fn count_mocks(source: &str) -> usize {
-        source.matches("jest.mock(").count() + source.matches("vi.mock(").count()
-    }
-
-    /// Find mocked module paths (simplified: look for jest.mock('...') or jest.mock(\"...\"))
-    fn mocked_modules(source: &str) -> Vec<(usize, String)> {
-        let mut result = Vec::new();
-        for (line_no, line) in source.lines().enumerate() {
-            let line = line.trim();
-            if line.contains("jest.mock(") || line.contains("vi.mock(") {
-                // Extract first string argument - simple scan for ' or " quoted string
-                if let Some(start) = line.find("mock(") {
-                    let after = &line[start + 5..];
-                    let rest = after.trim_start();
-                    let quote = rest.chars().next();
-                    if quote == Some('\'') || quote == Some('"') {
-                        let end_char = quote.unwrap();
-                        if let Some(end) = rest[1..].find(end_char) {
-                            let module = rest[1..1 + end].to_string();
-                            result.push((line_no + 1, module));
-                        }
-                    }
-                }
-            }
+    /// Extract first string literal argument from a call node (e.g. jest.mock('foo') -> "foo").
+    fn first_string_arg(
+        tree: &Tree,
+        source: &str,
+        call_start: usize,
+        call_end: usize,
+    ) -> Option<String> {
+        let root = tree.root_node();
+        let call_node = root.descendant_for_byte_range(call_start, call_end)?;
+        let args = call_node.child_by_field_name("arguments")?;
+        let mut cursor = args.walk();
+        let first_arg = args.named_children(&mut cursor).next()?;
+        let text = first_arg.utf8_text(source.as_bytes()).ok()?;
+        let s = text.trim();
+        if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+            Some(s[1..s.len() - 1].to_string())
+        } else {
+            None
         }
-        result
-    }
-
-    /// Check if any mocked module looks like the module under test (e.g. same file name)
-    #[allow(dead_code)]
-    fn mocks_module_under_test(
-        _source: &str,
-        mocked: &[(usize, String)],
-        test_file_path: Option<&str>,
-    ) -> Option<(usize, String)> {
-        let under_test = test_file_path.and_then(|p| {
-            let stem = std::path::Path::new(p).file_stem()?;
-            let stem = stem.to_str()?;
-            let stem = stem
-                .trim_end_matches(".test")
-                .trim_end_matches(".spec")
-                .trim_end_matches("_test")
-                .trim_end_matches("_spec");
-            Some(stem.to_string())
-        })?;
-        for (line, module) in mocked {
-            let mod_stem = module
-                .trim_start_matches('.')
-                .trim_start_matches('/')
-                .rsplit('/')
-                .next()
-                .unwrap_or(module)
-                .trim_end_matches(".ts")
-                .trim_end_matches(".tsx")
-                .trim_end_matches(".js")
-                .trim_end_matches(".jsx");
-            if mod_stem == under_test {
-                return Some((*line, module.clone()));
-            }
-        }
-        None
     }
 }
 
@@ -105,10 +64,43 @@ impl AnalysisRule for MockAbuseRule {
         "mock-abuse"
     }
 
-    fn analyze(&self, _tests: &[TestCase], source: &str, _tree: &Tree) -> Vec<Issue> {
+    fn analyze(&self, _tests: &[TestCase], source: &str, tree: &Tree) -> Vec<Issue> {
         let mut issues = Vec::new();
+        let lang = TypeScriptParser::language();
+        let cache = global_query_cache();
 
-        let count = Self::count_mocks(source);
+        let mut mock_calls: Vec<(usize, usize, String)> = Vec::new(); // (line, col, module)
+
+        if let Ok(matches) = cache.run_cached_query(source, tree, &lang, QueryId::MockCall) {
+            for caps in matches {
+                let obj = caps
+                    .iter()
+                    .find(|c| c.name == "obj")
+                    .map(|c| c.text.as_str());
+                let prop = caps
+                    .iter()
+                    .find(|c| c.name == "prop")
+                    .map(|c| c.text.as_str());
+                if obj != Some("jest") && obj != Some("vi") {
+                    continue;
+                }
+                if prop != Some("mock") {
+                    continue;
+                }
+                let call_cap = match caps.iter().find(|c| c.name == "call") {
+                    Some(c) => c,
+                    None => continue,
+                };
+                let (line, col) = call_cap.start_point;
+                let start_byte = call_cap.start_byte;
+                let end_byte = call_cap.end_byte;
+                if let Some(module) = Self::first_string_arg(tree, source, start_byte, end_byte) {
+                    mock_calls.push((line, col, module));
+                }
+            }
+        }
+
+        let count = mock_calls.len();
         if count > MOCK_COUNT_WARNING_THRESHOLD {
             issues.push(Issue {
                 rule: Rule::MockAbuse,
@@ -125,12 +117,8 @@ impl AnalysisRule for MockAbuseRule {
             });
         }
 
-        let mocked = Self::mocked_modules(source);
-        for (line_no, module) in &mocked {
+        for (line_no, _col, module) in &mock_calls {
             let mod_trimmed = module.trim_matches(|c| c == '\'' || c == '"');
-            // Extract the final segment of the module path for matching.
-            // e.g. '../UserMap' → 'UserMap', 'fs' → 'fs', 'Map' → 'Map'
-            // This prevents false positives like 'UserMap' matching 'Map'.
             let final_segment = mod_trimmed
                 .rsplit('/')
                 .next()
@@ -141,7 +129,6 @@ impl AnalysisRule for MockAbuseRule {
                 .trim_end_matches(".jsx");
 
             for std_name in STD_MOCKS {
-                // Exact match on the final path segment — not substring contains
                 if final_segment == *std_name {
                     issues.push(Issue {
                         rule: Rule::MockAbuse,
@@ -160,9 +147,6 @@ impl AnalysisRule for MockAbuseRule {
                 }
             }
         }
-
-        // Mocking module under test - we don't have test file path in the rule, so we skip that check
-        // (engine could pass it later; for now we only do count and std mock checks)
 
         issues
     }
@@ -187,14 +171,14 @@ mod tests {
     #[test]
     fn positive_detects_excessive_mocks() {
         let rule = MockAbuseRule::new();
-        let tree = crate::parser::TypeScriptParser::new()
-            .unwrap()
-            .parse("test")
-            .unwrap();
         let source = (0..6)
             .map(|_| "jest.mock('foo');")
             .collect::<Vec<_>>()
             .join("\n");
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(&source)
+            .unwrap();
         let issues = rule.analyze(&make_empty_tests(), &source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));
@@ -203,11 +187,11 @@ mod tests {
     #[test]
     fn positive_detects_std_lib_mock() {
         let rule = MockAbuseRule::new();
+        let source = "jest.mock('Math');";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "jest.mock('Math');";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::MockAbuse));
@@ -215,13 +199,12 @@ mod tests {
 
     #[test]
     fn negative_user_map_does_not_match_map() {
-        // Regression: jest.mock('../UserMap') must NOT match the built-in 'Map'
         let rule = MockAbuseRule::new();
+        let source = "jest.mock('../services/UserMap');";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "jest.mock('../services/UserMap');";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(
             issues.is_empty(),
@@ -232,11 +215,11 @@ mod tests {
     #[test]
     fn negative_map_service_does_not_match_map() {
         let rule = MockAbuseRule::new();
+        let source = "jest.mock('./MapService');";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "jest.mock('./MapService');";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(
             issues.is_empty(),
@@ -247,11 +230,11 @@ mod tests {
     #[test]
     fn negative_few_mocks_no_issue() {
         let rule = MockAbuseRule::new();
+        let source = "jest.mock('my-module');\nit('works', () => {});";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "jest.mock('my-module');\nit('works', () => {});";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(issues.is_empty());
     }

@@ -1,6 +1,11 @@
-//! Flaky test pattern detection - non-deterministic code without mocks
+//! Flaky test pattern detection - non-deterministic code without mocks.
+//! Uses tree-sitter queries to avoid false positives in comments and string literals.
 
 use super::AnalysisRule;
+use crate::parser::{
+    global_query_cache, is_inside_comment_range, is_inside_string_literal_range, QueryId,
+    TypeScriptParser,
+};
 use crate::{Issue, Location, Rule, Severity, TestCase, TestFramework};
 use tree_sitter::Tree;
 
@@ -76,7 +81,7 @@ impl FlakyPatternsRule {
         }
     }
 
-    /// Check if file has fake timers (jest.useFakeTimers, vi.useFakeTimers)
+    /// Check if file has fake timers (jest.useFakeTimers, vi.useFakeTimers) via source.
     fn has_fake_timers(source: &str) -> bool {
         source.contains("useFakeTimers")
     }
@@ -95,6 +100,27 @@ impl FlakyPatternsRule {
             || source.contains("vi.mock(") && (source.contains("fetch") || source.contains("axios"))
             || source.contains("mockImplementation") && source.contains("fetch")
     }
+
+    fn push_issue(
+        issues: &mut Vec<Issue>,
+        line: usize,
+        col: usize,
+        message: &str,
+        suggestion: String,
+    ) {
+        issues.push(Issue {
+            rule: Rule::FlakyPattern,
+            severity: if message.contains("new Date()") {
+                Severity::Info
+            } else {
+                Severity::Warning
+            },
+            message: message.to_string(),
+            location: Location::new(line, col),
+            suggestion: Some(suggestion),
+            fix: None,
+        });
+    }
 }
 
 impl Default for FlakyPatternsRule {
@@ -108,132 +134,255 @@ impl AnalysisRule for FlakyPatternsRule {
         "flaky-patterns"
     }
 
-    fn analyze(&self, _tests: &[TestCase], source: &str, _tree: &Tree) -> Vec<Issue> {
+    fn analyze(&self, _tests: &[TestCase], source: &str, tree: &Tree) -> Vec<Issue> {
         let mut issues = Vec::new();
         let has_fake_timers = Self::has_fake_timers(source);
         let has_random_mock = Self::has_random_mock(source);
         let has_fetch_mock = Self::has_fetch_mock(source);
+        let root = tree.root_node();
+        let lang = TypeScriptParser::language();
+        let cache = global_query_cache();
 
-        for (zero_indexed, line) in source.lines().enumerate() {
-            let line_no = zero_indexed + 1;
-            let trimmed = line.trim();
-
-            if trimmed.starts_with("//") || trimmed.starts_with("/*") {
-                continue;
-            }
-
-            // Date.now() without mock
-            if trimmed.contains("Date.now()") && !has_fake_timers {
-                let col = line.find("Date.now()").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::FlakyPattern,
-                    severity: Severity::Warning,
-                    message: "Date.now() is non-deterministic - use fake timers or mock it"
-                        .to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
-                    fix: None,
-                });
-            }
-
-            // new Date() without freeze
-            if (trimmed.contains("new Date()") || trimmed.contains("new Date ("))
-                && !has_fake_timers
-            {
-                let col = line.find("new Date").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::FlakyPattern,
-                    severity: Severity::Info,
-                    message: "new Date() is non-deterministic - consider using fake timers"
-                        .to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Date)),
-                    fix: None,
-                });
-            }
-
-            // Math.random() without mock
-            if trimmed.contains("Math.random()") && !has_random_mock {
-                let col = line.find("Math.random()").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::FlakyPattern,
-                    severity: Severity::Warning,
-                    message: "Math.random() is non-deterministic - mock it for reproducible tests"
-                        .to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(self.random_mock_suggestion()),
-                    fix: None,
-                });
-            }
-
-            // setTimeout/setInterval without fake timers — timing-dependent code is flaky.
-            // Only flag when there's a numeric delay argument (regex-free: look for
-            // a comma followed by digits, e.g. `setTimeout(fn, 1000)`).
-            if (trimmed.contains("setTimeout(") || trimmed.contains("setInterval("))
-                && !has_fake_timers
-            {
-                // Check for an actual numeric delay: comma, optional whitespace, digits
-                let call_start = trimmed
-                    .find("setTimeout(")
-                    .or_else(|| trimmed.find("setInterval("));
-                let has_numeric_delay = call_start
-                    .and_then(|start| {
-                        // Scan the argument list after the opening paren
-                        let args = &trimmed[start..];
-                        let comma_pos = args.find(',')?;
-                        let after_comma = args[comma_pos + 1..].trim_start();
-                        // Check if the next non-whitespace chars are digits
-                        Some(after_comma.starts_with(|c: char| c.is_ascii_digit()))
-                    })
-                    .unwrap_or(false);
-
-                if has_numeric_delay {
-                    let col = line
-                        .find("setTimeout")
-                        .or_else(|| line.find("setInterval"))
-                        .unwrap_or(0)
-                        + 1;
-                    issues.push(Issue {
-                        rule: Rule::FlakyPattern,
-                        severity: Severity::Warning,
-                        message: "setTimeout/setInterval with literal delay can cause flaky tests"
-                            .to_string(),
-                        location: Location::new(line_no, col),
-                        suggestion: Some(self.timer_suggestion(TimerSuggestionKind::Advance)),
-                        fix: None,
-                    });
+        // Date.now() and new Date() via AST
+        if let Ok(date_matches) = cache.run_cached_query(source, tree, &lang, QueryId::DateNow) {
+            for caps in date_matches {
+                let (line, col) = caps.first().map(|c| c.start_point).unwrap_or((1, 1));
+                let start_byte = caps.first().map(|c| c.start_byte).unwrap_or(0);
+                let end_byte = caps.first().map(|c| c.end_byte).unwrap_or(0);
+                if is_inside_comment_range(start_byte, end_byte, source) {
+                    continue;
+                }
+                if is_inside_string_literal_range(start_byte, end_byte, root) {
+                    continue;
+                }
+                let obj = caps
+                    .iter()
+                    .find(|c| c.name == "obj")
+                    .map(|c| c.text.as_str());
+                let prop = caps
+                    .iter()
+                    .find(|c| c.name == "prop")
+                    .map(|c| c.text.as_str());
+                let ctor = caps
+                    .iter()
+                    .find(|c| c.name == "ctor")
+                    .map(|c| c.text.as_str());
+                if matches!((obj, prop), (Some("Date"), Some("now"))) && !has_fake_timers {
+                    Self::push_issue(
+                        &mut issues,
+                        line,
+                        col,
+                        "Date.now() is non-deterministic - use fake timers or mock it",
+                        self.timer_suggestion(TimerSuggestionKind::Date),
+                    );
+                } else if ctor == Some("Date") && !has_fake_timers {
+                    Self::push_issue(
+                        &mut issues,
+                        line,
+                        col,
+                        "new Date() is non-deterministic - consider using fake timers",
+                        self.timer_suggestion(TimerSuggestionKind::Date),
+                    );
                 }
             }
+        }
 
-            // fetch() or axios without mock (in unit test context - simple heuristic)
-            if (trimmed.contains("fetch(")
-                || trimmed.contains("axios.")
-                || trimmed.contains("axios("))
-                && !trimmed.contains("mock")
-                && !has_fetch_mock
-            {
-                // Avoid double-reporting per line
-                if !issues
+        // Math.random() via AST
+        if let Ok(math_matches) = cache.run_cached_query(source, tree, &lang, QueryId::MathRandom) {
+            for caps in math_matches {
+                let obj = caps
                     .iter()
-                    .any(|i| i.location.line == line_no && i.rule == Rule::FlakyPattern)
+                    .find(|c| c.name == "obj")
+                    .map(|c| c.text.as_str());
+                let prop = caps
+                    .iter()
+                    .find(|c| c.name == "prop")
+                    .map(|c| c.text.as_str());
+                if obj != Some("Math") || prop != Some("random") {
+                    continue;
+                }
+                let (line, col) = caps.first().map(|c| c.start_point).unwrap_or((1, 1));
+                let start_byte = caps.first().map(|c| c.start_byte).unwrap_or(0);
+                let end_byte = caps.first().map(|c| c.end_byte).unwrap_or(0);
+                if is_inside_comment_range(start_byte, end_byte, source)
+                    || is_inside_string_literal_range(start_byte, end_byte, root)
                 {
-                    let col = line
-                        .find("fetch(")
-                        .or_else(|| line.find("axios"))
-                        .unwrap_or(0)
-                        + 1;
-                    issues.push(Issue {
-                        rule: Rule::FlakyPattern,
-                        severity: Severity::Warning,
-                        message:
-                            "Network call (fetch/axios) without mock - test may be flaky or slow"
-                                .to_string(),
-                        location: Location::new(line_no, col),
-                        suggestion: Some(
+                    continue;
+                }
+                if !has_random_mock {
+                    Self::push_issue(
+                        &mut issues,
+                        line,
+                        col,
+                        "Math.random() is non-deterministic - mock it for reproducible tests",
+                        self.random_mock_suggestion(),
+                    );
+                }
+            }
+        }
+
+        // setTimeout / setInterval via AST
+        if let Ok(timer_matches) =
+            cache.run_cached_query(source, tree, &lang, QueryId::SetTimeoutInterval)
+        {
+            for caps in timer_matches {
+                let fn_name = caps
+                    .iter()
+                    .find(|c| c.name == "fn")
+                    .map(|c| c.text.as_str());
+                if fn_name != Some("setTimeout") && fn_name != Some("setInterval") {
+                    continue;
+                }
+                let (line, col) = caps.first().map(|c| c.start_point).unwrap_or((1, 1));
+                let start_byte = caps.first().map(|c| c.start_byte).unwrap_or(0);
+                let end_byte = caps.first().map(|c| c.end_byte).unwrap_or(0);
+                if is_inside_comment_range(start_byte, end_byte, source)
+                    || is_inside_string_literal_range(start_byte, end_byte, root)
+                {
+                    continue;
+                }
+                if !has_fake_timers {
+                    // Check for numeric delay on the same line (e.g. setTimeout(fn, 1000))
+                    let line_src = source.lines().nth(line.saturating_sub(1)).unwrap_or("");
+                    let has_numeric_delay = line_src
+                        .find("setTimeout(")
+                        .or_else(|| line_src.find("setInterval("))
+                        .and_then(|start| {
+                            let args = line_src.get(start..).unwrap_or("");
+                            let comma_pos = args.find(',')?;
+                            let after = args.get(comma_pos + 1..).unwrap_or("").trim_start();
+                            Some(after.starts_with(|c: char| c.is_ascii_digit()))
+                        })
+                        == Some(true);
+                    if has_numeric_delay {
+                        Self::push_issue(
+                            &mut issues,
+                            line,
+                            col,
+                            "setTimeout/setInterval with literal delay can cause flaky tests",
+                            self.timer_suggestion(TimerSuggestionKind::Advance),
+                        );
+                    }
+                }
+            }
+        }
+
+        // fetch / axios via AST
+        if let Ok(fetch_matches) =
+            cache.run_cached_query(source, tree, &lang, QueryId::FetchAxiosCall)
+        {
+            for caps in fetch_matches {
+                let fn_name = caps
+                    .iter()
+                    .find(|c| c.name == "fn")
+                    .map(|c| c.text.as_str());
+                let obj = caps
+                    .iter()
+                    .find(|c| c.name == "obj")
+                    .map(|c| c.text.as_str());
+                let prop = caps
+                    .iter()
+                    .find(|c| c.name == "prop")
+                    .map(|c| c.text.as_str());
+                let is_fetch = fn_name == Some("fetch");
+                let is_axios = fn_name == Some("axios")
+                    || (obj == Some("axios")
+                        && prop
+                            .map(|p| {
+                                p.starts_with("get") || p.starts_with("post") || p == "request"
+                            })
+                            .unwrap_or(false));
+                if !is_fetch && !is_axios {
+                    continue;
+                }
+                let (line, col) = caps.first().map(|c| c.start_point).unwrap_or((1, 1));
+                let start_byte = caps.first().map(|c| c.start_byte).unwrap_or(0);
+                let end_byte = caps.first().map(|c| c.end_byte).unwrap_or(0);
+                if is_inside_comment_range(start_byte, end_byte, source)
+                    || is_inside_string_literal_range(start_byte, end_byte, root)
+                {
+                    continue;
+                }
+                if !has_fetch_mock {
+                    Self::push_issue(
+                        &mut issues,
+                        line,
+                        col,
+                        "Network call (fetch/axios) without mock - test may be flaky or slow",
+                        "Mock fetch/axios with jest.mock() or MSW for unit tests".to_string(),
+                    );
+                }
+            }
+        }
+
+        // Fallback: line-based if queries failed (e.g. parse error or unsupported grammar)
+        if issues.is_empty()
+            && (source.contains("Date.now()")
+                || source.contains("Math.random()")
+                || source.contains("setTimeout(")
+                || source.contains("fetch("))
+        {
+            let has_any_ast = cache
+                .run_cached_query(source, tree, &lang, QueryId::DateNow)
+                .is_ok();
+            if !has_any_ast {
+                for (zero_indexed, line) in source.lines().enumerate() {
+                    let line_no = zero_indexed + 1;
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("//") || trimmed.starts_with("/*") {
+                        continue;
+                    }
+                    if trimmed.contains("Date.now()") && !has_fake_timers {
+                        let col = line.find("Date.now()").unwrap_or(0) + 1;
+                        Self::push_issue(
+                            &mut issues,
+                            line_no,
+                            col,
+                            "Date.now() is non-deterministic - use fake timers or mock it",
+                            self.timer_suggestion(TimerSuggestionKind::Date),
+                        );
+                    }
+                    if (trimmed.contains("new Date()") || trimmed.contains("new Date ("))
+                        && !has_fake_timers
+                    {
+                        let col = line.find("new Date").unwrap_or(0) + 1;
+                        Self::push_issue(
+                            &mut issues,
+                            line_no,
+                            col,
+                            "new Date() is non-deterministic - consider using fake timers",
+                            self.timer_suggestion(TimerSuggestionKind::Date),
+                        );
+                    }
+                    if trimmed.contains("Math.random()") && !has_random_mock {
+                        let col = line.find("Math.random()").unwrap_or(0) + 1;
+                        Self::push_issue(
+                            &mut issues,
+                            line_no,
+                            col,
+                            "Math.random() is non-deterministic - mock it for reproducible tests",
+                            self.random_mock_suggestion(),
+                        );
+                    }
+                    if (trimmed.contains("fetch(")
+                        || trimmed.contains("axios.")
+                        || trimmed.contains("axios("))
+                        && !trimmed.contains("mock")
+                        && !has_fetch_mock
+                    {
+                        let col = line
+                            .find("fetch(")
+                            .or_else(|| line.find("axios"))
+                            .unwrap_or(0)
+                            + 1;
+                        Self::push_issue(
+                            &mut issues,
+                            line_no,
+                            col,
+                            "Network call (fetch/axios) without mock - test may be flaky or slow",
                             "Mock fetch/axios with jest.mock() or MSW for unit tests".to_string(),
-                        ),
-                        fix: None,
-                    });
+                        );
+                    }
                 }
             }
         }
@@ -264,16 +413,16 @@ mod tests {
     #[test]
     fn positive_detects_date_now_without_fake_timers() {
         let rule = FlakyPatternsRule::new();
-        let tree = crate::parser::TypeScriptParser::new()
-            .unwrap()
-            .parse("test")
-            .unwrap();
         let source = r#"
         it('uses time', () => {
             const t = Date.now();
             expect(t).toBeGreaterThan(0);
         });
         "#;
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(source)
+            .unwrap();
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(
             !issues.is_empty(),
@@ -285,11 +434,11 @@ mod tests {
     #[test]
     fn positive_detects_math_random_without_mock() {
         let rule = FlakyPatternsRule::new();
+        let source = "const x = Math.random();";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "const x = Math.random();";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::FlakyPattern));
@@ -298,10 +447,6 @@ mod tests {
     #[test]
     fn negative_no_issues_with_fake_timers() {
         let rule = FlakyPatternsRule::new();
-        let tree = crate::parser::TypeScriptParser::new()
-            .unwrap()
-            .parse("test")
-            .unwrap();
         let source = r#"
         beforeEach(() => { jest.useFakeTimers(); });
         it('uses time', () => {
@@ -309,6 +454,10 @@ mod tests {
             expect(t).toBeGreaterThan(0);
         });
         "#;
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(source)
+            .unwrap();
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(
             issues.is_empty(),
@@ -319,13 +468,33 @@ mod tests {
     #[test]
     fn negative_clean_source_no_issues() {
         let rule = FlakyPatternsRule::new();
+        let source = "it('adds numbers', () => { expect(1 + 1).toBe(2); });";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "it('adds numbers', () => { expect(1 + 1).toBe(2); });";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn negative_date_now_in_comment_no_issue() {
+        let rule = FlakyPatternsRule::new();
+        let source = r#"
+        it('test', () => {
+            // Date.now() is used elsewhere
+            expect(1).toBe(1);
+        });
+        "#;
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(source)
+            .unwrap();
+        let issues = rule.analyze(&make_empty_tests(), source, &tree);
+        assert!(
+            !issues.iter().any(|i| i.message.contains("Date.now()")),
+            "should not flag Date.now() inside comment"
+        );
     }
 
     #[test]

@@ -1,7 +1,11 @@
-//! React Testing Library best practice rules
+//! React Testing Library best practice rules.
+//! Uses tree-sitter to find querySelector/getByTestId/fireEvent calls and avoid false positives in comments/strings.
 
 use super::AnalysisRule;
-use crate::{Issue, Location, Rule, Severity, TestCase};
+use crate::parser::{
+    find_call_expressions, is_inside_comment_range, is_inside_string_literal_range,
+};
+use crate::{Issue, Rule, Severity, TestCase};
 use tree_sitter::Tree;
 
 /// Rule for React Testing Library best practices (only runs when RTL is detected)
@@ -12,7 +16,6 @@ impl ReactTestingLibraryRule {
         Self
     }
 
-    /// Check if the file uses React Testing Library (imports)
     fn uses_rtl(source: &str) -> bool {
         source.contains("@testing-library/react")
             || source.contains("@testing-library/dom")
@@ -32,70 +35,83 @@ impl AnalysisRule for ReactTestingLibraryRule {
         "react-testing-library"
     }
 
-    fn analyze(&self, _tests: &[TestCase], source: &str, _tree: &Tree) -> Vec<Issue> {
+    fn analyze(&self, _tests: &[TestCase], source: &str, tree: &Tree) -> Vec<Issue> {
         if !Self::uses_rtl(source) {
             return vec![];
         }
 
         let mut issues = Vec::new();
+        let root = tree.root_node();
 
-        for (zero_indexed, line) in source.lines().enumerate() {
-            let line_no = zero_indexed + 1;
-            let trimmed = line.trim();
-
-            if trimmed.starts_with("//") || trimmed.starts_with("/*") {
+        for call in find_call_expressions(tree, source, "container.querySelector") {
+            if is_inside_comment_range(call.start_byte, call.end_byte, source) {
                 continue;
             }
-
-            // container.querySelector - prefer screen.getByRole
-            if trimmed.contains("container.querySelector(")
-                || trimmed.contains("container.querySelector (")
-            {
-                let col = line.find("querySelector").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::RtlPreferScreen,
-                    severity: Severity::Warning,
-                    message: "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility".to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(
-                        "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead".to_string(),
-                    ),
-                    fix: None,
-                });
+            if is_inside_string_literal_range(call.start_byte, call.end_byte, root) {
+                continue;
             }
+            issues.push(Issue {
+                rule: Rule::RtlPreferScreen,
+                severity: Severity::Warning,
+                message: "Avoid container.querySelector - prefer screen.getByRole or screen.getByLabelText for accessibility".to_string(),
+                location: call.location.clone(),
+                suggestion: Some(
+                    "Use screen.getByRole('button', { name: 'Submit' }) or screen.getByLabelText('Email') instead".to_string(),
+                ),
+                fix: None,
+            });
+        }
 
-            // getByTestId as primary query - prefer semantic queries
-            if (trimmed.contains("getByTestId(") || trimmed.contains("getByTestId ("))
-                && !trimmed.contains("getByRole")
-                && !trimmed.contains("getByLabelText")
-            {
-                let col = line.find("getByTestId").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::RtlPreferSemantic,
-                    severity: Severity::Info,
-                    message: "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior".to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(
-                        "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible".to_string(),
-                    ),
-                    fix: None,
-                });
+        for call in find_call_expressions(tree, source, "getByTestId") {
+            if is_inside_comment_range(call.start_byte, call.end_byte, source) {
+                continue;
             }
+            if is_inside_string_literal_range(call.start_byte, call.end_byte, root) {
+                continue;
+            }
+            let line_src = source
+                .lines()
+                .nth(call.location.line.saturating_sub(1))
+                .unwrap_or("");
+            if line_src.contains("getByRole") || line_src.contains("getByLabelText") {
+                continue;
+            }
+            issues.push(Issue {
+                rule: Rule::RtlPreferSemantic,
+                severity: Severity::Info,
+                message: "getByTestId is a last resort - prefer getByRole, getByLabelText, or getByText for user-facing behavior".to_string(),
+                location: call.location.clone(),
+                suggestion: Some(
+                    "Use getByRole('button', { name: '...' }) or getByLabelText('...') when possible".to_string(),
+                ),
+                fix: None,
+            });
+        }
 
-            // fireEvent - prefer userEvent
-            if trimmed.contains("fireEvent.") && !trimmed.contains("userEvent") {
-                let col = line.find("fireEvent").unwrap_or(0) + 1;
-                issues.push(Issue {
-                    rule: Rule::RtlPreferUserEvent,
-                    severity: Severity::Info,
-                    message: "Prefer userEvent over fireEvent for more realistic user interactions".to_string(),
-                    location: Location::new(line_no, col),
-                    suggestion: Some(
-                        "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)".to_string(),
-                    ),
-                    fix: None,
-                });
+        for call in find_call_expressions(tree, source, "fireEvent") {
+            if is_inside_comment_range(call.start_byte, call.end_byte, source) {
+                continue;
             }
+            if is_inside_string_literal_range(call.start_byte, call.end_byte, root) {
+                continue;
+            }
+            let line_src = source
+                .lines()
+                .nth(call.location.line.saturating_sub(1))
+                .unwrap_or("");
+            if line_src.contains("userEvent") {
+                continue;
+            }
+            issues.push(Issue {
+                rule: Rule::RtlPreferUserEvent,
+                severity: Severity::Info,
+                message: "Prefer userEvent over fireEvent for more realistic user interactions".to_string(),
+                location: call.location.clone(),
+                suggestion: Some(
+                    "Use @testing-library/user-event: userEvent.click(element) instead of fireEvent.click(element)".to_string(),
+                ),
+                fix: None,
+            });
         }
 
         issues
@@ -129,15 +145,15 @@ mod tests {
     #[test]
     fn positive_detects_query_selector_with_rtl() {
         let rule = ReactTestingLibraryRule::new();
-        let tree = crate::parser::TypeScriptParser::new()
-            .unwrap()
-            .parse("test")
-            .unwrap();
         let source = r#"
         import { render } from '@testing-library/react';
         const { container } = render(<App />);
         const btn = container.querySelector('.button');
         "#;
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(source)
+            .unwrap();
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.rule == Rule::RtlPreferScreen));
@@ -146,11 +162,11 @@ mod tests {
     #[test]
     fn negative_no_rtl_import_no_issues() {
         let rule = ReactTestingLibraryRule::new();
+        let source = "it('works', () => { expect(1).toBe(1); });";
         let tree = crate::parser::TypeScriptParser::new()
             .unwrap()
-            .parse("test")
+            .parse(source)
             .unwrap();
-        let source = "it('works', () => { expect(1).toBe(1); });";
         let issues = rule.analyze(&make_empty_tests(), source, &tree);
         assert!(issues.is_empty());
     }
