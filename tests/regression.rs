@@ -42,12 +42,12 @@ macro_rules! regression {
     };
 }
 
-// tests/ (baselines updated for Phase 2.2 rules + AST migrations)
+// tests/ (baselines updated for redundant-test precision + missing-error-test fix + hardcoded dedup)
 regression!(
     assertion_intent_mismatch,
     "test-repos/fake-project/tests/assertion-intent-mismatch.test.ts",
-    60,
-    18
+    61,
+    17
 );
 regression!(
     async_missing_await,
@@ -55,13 +55,13 @@ regression!(
     71,
     8
 );
-regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 76, 14);
-regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 76, 7);
+regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 91, 11);
+regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 79, 15);
 regression!(
     debug_code,
     "test-repos/fake-project/tests/debug-code.test.ts",
-    49,
-    21
+    51,
+    19
 );
 regression!(
     duplicate_names,
@@ -69,24 +69,24 @@ regression!(
     73,
     6
 );
-regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 58, 22);
+regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 59, 21);
 regression!(
     hardcoded_limited_input,
     "test-repos/fake-project/tests/hardcoded-limited-input.test.ts",
-    68,
-    21
+    75,
+    9
 );
 regression!(
     missing_boundary_tests,
     "test-repos/fake-project/tests/missing-boundary-tests.test.ts",
-    81,
-    4
+    82,
+    3
 );
 regression!(
     missing_error_tests,
     "test-repos/fake-project/tests/missing-error-tests.test.ts",
-    78,
-    8
+    80,
+    6
 );
 regression!(
     mixed_bad,
@@ -97,8 +97,8 @@ regression!(
 regression!(
     mock_abuse,
     "test-repos/fake-project/tests/mock-abuse.test.ts",
-    74,
-    9
+    75,
+    8
 );
 regression!(
     mutation_resistant,
@@ -121,32 +121,32 @@ regression!(
 regression!(
     skipped_and_focused,
     "test-repos/fake-project/tests/skipped-and-focused.test.ts",
-    24,
-    31
+    25,
+    30
 );
 regression!(
     snapshot_only,
     "test-repos/fake-project/tests/snapshot-only.test.ts",
-    41,
-    22
+    42,
+    21
 );
 regression!(
     trivial_assertions,
     "test-repos/fake-project/tests/trivial-assertions.test.ts",
-    28,
-    28
+    31,
+    25
 );
 regression!(
     vague_names,
     "test-repos/fake-project/tests/vague-names.test.ts",
-    28,
-    24
+    32,
+    20
 );
 regression!(
     weak_assertions,
     "test-repos/fake-project/tests/weak-assertions.test.ts",
-    65,
-    17
+    66,
+    15
 );
 
 // e2e/
@@ -165,22 +165,22 @@ regression!(
 regression!(
     login_e2e,
     "test-repos/fake-project/e2e/login.e2e.test.ts",
-    78,
-    8
+    79,
+    7
 );
 regression!(
     weak_cypress,
     "test-repos/fake-project/e2e/weak-cypress.cy.ts",
-    77,
-    10
+    78,
+    9
 );
 
 // vitest/
 regression!(
     vitest_math,
     "test-repos/fake-project/vitest/math.test.ts",
-    68,
-    10
+    72,
+    6
 );
 
 // src/
@@ -199,8 +199,8 @@ regression!(
 regression!(
     validators_test,
     "test-repos/fake-project/src/__tests__/validators.test.ts",
-    50,
-    15
+    51,
+    14
 );
 
 /// Run with: cargo test --test regression print_baselines -- --ignored --nocapture

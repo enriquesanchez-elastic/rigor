@@ -259,7 +259,10 @@ pub enum Rule {
     BehavioralCompleteness,
     /// Function has side effects but test doesn't verify them
     SideEffectNotVerified,
-    // Phase 2.2 critical rules
+    // Phase 2.2 rules: implemented, contribute to penalty deductions only (not category scores).
+    // These rules produce real issues that appear in output and reduce the final score
+    // via the penalty system. They are excluded from category scoring because they don't
+    // map cleanly to the six core categories (Assertion Quality, Error Coverage, etc.).
     /// Test is too complex (high cyclomatic complexity or too many assertions)
     TestComplexity,
     /// Test is tightly coupled to implementation details
@@ -313,7 +316,7 @@ pub fn rule_scoring_category(rule: &Rule) -> Option<&'static str> {
         MissingBoundaryTest => Some("Boundary Conditions"),
         SharedState => Some("Test Isolation"),
         HardcodedValues | LimitedInputVariety | DuplicateTest => Some("Input Variety"),
-        // Phase 2.2 rules: stubs excluded from scoring until implemented
+        // Phase 2.2 rules: penalty-only (do not map to a core scoring category)
         TestComplexity
         | ImplementationCoupling
         | VacuousTest

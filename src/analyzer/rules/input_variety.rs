@@ -478,7 +478,9 @@ impl AnalysisRule for InputVarietyRule {
             });
         }
 
-        // Check for hardcoded values that look like real data
+        // Check for hardcoded values that look like real data.
+        // Dedup: only flag each unique hardcoded value once per file.
+        let mut seen_hardcoded: HashSet<String> = HashSet::new();
         for value in &values {
             if value.kind == ValueKind::String {
                 let trimmed = value
@@ -486,6 +488,9 @@ impl AnalysisRule for InputVarietyRule {
                     .trim_matches(|c| c == '"' || c == '\'' || c == '`');
                 // Check for patterns that look like real emails, names, etc.
                 if trimmed.contains('@') && trimmed.contains('.') && trimmed.len() > 10 {
+                    if !seen_hardcoded.insert(trimmed.to_string()) {
+                        continue; // already flagged this exact value
+                    }
                     issues.push(Issue {
                         rule: Rule::HardcodedValues,
                         severity: Severity::Info,

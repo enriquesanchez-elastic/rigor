@@ -10,7 +10,7 @@ use rigor::history::{
     append_run, find_project_root, format_delta, load_history, previous_score, save_history,
 };
 use rigor::mutation::{self, report_mutation_result};
-use rigor::reporter::{ConsoleReporter, JsonReporter, SarifReporter};
+use rigor::reporter::{ConsoleReporter, HtmlReporter, JsonReporter, SarifReporter};
 use rigor::suggestions::{extract_code_block, offer_apply, AiSuggestionGenerator};
 use rigor::watcher::TestWatcher;
 use std::io::Read;
@@ -73,6 +73,14 @@ struct Args {
     /// Output in SARIF format (for GitHub Code Scanning)
     #[arg(long)]
     sarif: bool,
+
+    /// Generate HTML report (writes to --html-output or rigor-report.html)
+    #[arg(long)]
+    html: bool,
+
+    /// Path for HTML report (default: rigor-report.html)
+    #[arg(long, value_name = "PATH")]
+    html_output: Option<PathBuf>,
 
     /// Only analyze staged (git) test files (for pre-commit hooks)
     #[arg(long)]
@@ -412,7 +420,28 @@ fn run() -> Result<ExitCode> {
     };
 
     // Output results
-    if args.sarif {
+    if args.html {
+        let reporter = HtmlReporter::new();
+        let html = reporter.report(&results, &stats);
+        let out_path = args
+            .html_output
+            .as_deref()
+            .unwrap_or(std::path::Path::new("rigor-report.html"));
+        std::fs::write(out_path, html)
+            .with_context(|| format!("Failed to write HTML report to {}", out_path.display()))?;
+        if !args.quiet {
+            eprintln!(
+                "{}: HTML report written to {}",
+                "Report".green().bold(),
+                out_path.display()
+            );
+        }
+        if let Some(ref root) = find_project_root(work_dir) {
+            let mut h = load_history(root.as_path());
+            append_run(&mut h, &results, None);
+            let _ = save_history(root, &h);
+        }
+    } else if args.sarif {
         let reporter = SarifReporter::new();
         println!("{}", reporter.report(&results, Some(&stats)));
     } else if args.json {

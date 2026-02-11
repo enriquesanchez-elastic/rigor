@@ -473,13 +473,22 @@ impl SourceMapper {
             }
         }
 
-        // Also check for index file in a subdirectory with the same name
+        // Also check for files in a subdirectory with the same name.
+        // Common patterns: auth/ -> auth/index.ts, auth/auth.ts
         let subdir = dir.join(base_name);
         if subdir.is_dir() {
-            for ext in extensions {
+            // Check index file first (auth/index.ts)
+            for ext in &extensions {
                 let index = subdir.join(format!("index.{}", ext));
                 if index.exists() {
                     return Some(index);
+                }
+            }
+            // Check same-named entry file (auth/auth.ts)
+            for ext in &extensions {
+                let entry = subdir.join(format!("{}.{}", base_name, ext));
+                if entry.exists() {
+                    return Some(entry);
                 }
             }
         }
@@ -709,6 +718,42 @@ mod tests {
         assert_eq!(
             result.unwrap().file_name().unwrap().to_str().unwrap(),
             "Button.tsx"
+        );
+    }
+
+    #[test]
+    fn test_find_in_dir_subdir_same_name() {
+        // Setup: auth/auth.ts (common module-per-directory pattern)
+        let dir = tempfile::TempDir::new().unwrap();
+        let subdir = dir.path().join("auth");
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(subdir.join("auth.ts"), "export function authenticate() {}").unwrap();
+
+        let result = SourceMapper::find_in_dir(dir.path(), "auth");
+        assert!(
+            result.is_some(),
+            "should find auth/auth.ts via subdir/same-name pattern"
+        );
+        assert!(
+            result.unwrap().to_string_lossy().ends_with("auth/auth.ts"),
+            "should resolve to auth/auth.ts"
+        );
+    }
+
+    #[test]
+    fn test_find_in_dir_subdir_index_preferred_over_same_name() {
+        // When both auth/index.ts and auth/auth.ts exist, index should win
+        let dir = tempfile::TempDir::new().unwrap();
+        let subdir = dir.path().join("auth");
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(subdir.join("index.ts"), "export * from './auth';").unwrap();
+        fs::write(subdir.join("auth.ts"), "export function authenticate() {}").unwrap();
+
+        let result = SourceMapper::find_in_dir(dir.path(), "auth");
+        assert!(result.is_some());
+        assert!(
+            result.unwrap().to_string_lossy().ends_with("auth/index.ts"),
+            "index.ts should be preferred over auth/auth.ts"
         );
     }
 

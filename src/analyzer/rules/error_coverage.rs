@@ -36,15 +36,22 @@ impl ErrorCoverageRule {
     }
 
     fn has_error_test(tests: &[TestCase], fn_name: &str) -> bool {
-        for test in tests {
-            // Check if test name mentions the function and error handling
-            let name_lower = test.name.to_lowercase();
-            let fn_name_lower = fn_name.to_lowercase();
+        let fn_name_lower = fn_name.to_lowercase();
 
-            // The function name must actually appear in the test name.
-            // Previously `name_lower.contains("error")` was here too, which caused
-            // any test with "error" in its name to match ANY function — a false positive.
+        for test in tests {
+            let name_lower = test.name.to_lowercase();
+
+            // The function name can appear in the test name OR in assertion raw text.
+            // Previously only checked the test name, which missed cases like
+            // "should throw AuthError" where the test calls authenticate() in the
+            // assertion but doesn't mention it in the name.
             let mentions_function = name_lower.contains(&fn_name_lower);
+            let assertions_reference_fn = test
+                .assertions
+                .iter()
+                .any(|a| a.raw.to_lowercase().contains(&fn_name_lower));
+
+            let references_function = mentions_function || assertions_reference_fn;
 
             let mentions_error = name_lower.contains("throw")
                 || name_lower.contains("error")
@@ -52,17 +59,17 @@ impl ErrorCoverageRule {
                 || name_lower.contains("invalid")
                 || name_lower.contains("reject");
 
-            if mentions_function && mentions_error {
+            if references_function && mentions_error {
                 return true;
             }
 
-            // Check if test has toThrow assertions
+            // Check if test has toThrow assertions that reference the function
             let has_throw_assertion = test.assertions.iter().any(|a| {
                 matches!(a.kind, AssertionKind::ToThrow)
                     || matches!(&a.kind, AssertionKind::Negated(inner) if matches!(**inner, AssertionKind::ToThrow))
             });
 
-            if has_throw_assertion && name_lower.contains(&fn_name_lower) {
+            if has_throw_assertion && references_function {
                 return true;
             }
         }
@@ -249,6 +256,26 @@ mod tests {
 
         assert!(ErrorCoverageRule::has_error_test(&tests, "parseInput"));
         assert!(!ErrorCoverageRule::has_error_test(&tests, "otherFunction"));
+    }
+
+    #[test]
+    fn test_error_test_detected_via_assertion_raw_text() {
+        // Test name doesn't contain "authenticate" but the assertion raw text does.
+        // This catches the auth.test.ts pattern: "should throw AuthError for invalid credentials"
+        // with expect(() => authenticate(...)).toThrow(AuthError)
+        let mut throw_assertion = make_throw_assertion();
+        throw_assertion.raw =
+            "expect(() => authenticate('user@example.com', 'wrongPassword')).toThrow(AuthError)"
+                .to_string();
+        let tests = vec![make_test(
+            "should throw AuthError for invalid credentials",
+            vec![throw_assertion],
+        )];
+
+        assert!(
+            ErrorCoverageRule::has_error_test(&tests, "authenticate"),
+            "should detect error test via assertion raw text even when test name doesn't contain function name"
+        );
     }
 
     #[test]

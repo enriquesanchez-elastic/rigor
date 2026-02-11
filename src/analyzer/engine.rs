@@ -3,11 +3,31 @@
 use crate::config::{Config, RuleSeverity, SourceMappingMode};
 use crate::detector::{FrameworkDetector, SourceMapper};
 use crate::parser::{IgnoreDirectives, SourceFileParser, TestFileParser, TypeScriptParser};
-use crate::{issue_in_test_range, AnalysisResult, Issue, Score, TestScore};
+use crate::{issue_in_test_range, AnalysisResult, Issue, Score, ScoreBreakdown, TestScore};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tree_sitter::Tree;
+
+/// When source analysis is unavailable, source-dependent categories (Error Coverage,
+/// Boundary Conditions) cannot detect issues. Their scores default to 25/25 — but
+/// that doesn't mean coverage is perfect, it means we have no data.
+///
+/// We scale these categories proportionally: score = natural * 15 / 25.
+/// - No issues detected → 25 * 15/25 = 15 (neutral "unknown")
+/// - Some issues (19/25) → 19 * 15/25 = 11 (deductions still visible)
+/// - Many issues (10/25) → 10 * 15/25 = 6 (severe deductions preserved)
+///
+/// This preserves the relative impact of detected issues rather than hiding them
+/// behind a flat cap, while still preventing "no source = perfect score."
+fn scale_no_source_categories(breakdown: &mut ScoreBreakdown) {
+    const NO_SOURCE_BASELINE: u32 = 15;
+    const MAX_CATEGORY: u32 = 25;
+    breakdown.error_coverage =
+        ((breakdown.error_coverage as u32 * NO_SOURCE_BASELINE) / MAX_CATEGORY) as u8;
+    breakdown.boundary_conditions =
+        ((breakdown.boundary_conditions as u32 * NO_SOURCE_BASELINE) / MAX_CATEGORY) as u8;
+}
 
 use super::rules::{
     AiSmellsRule, AnalysisRule, AssertionIntentRule, AssertionQualityRule,
@@ -375,27 +395,9 @@ impl AnalysisEngine {
         );
 
         // Fix P1.3: "No source = free points"
-        // When source file analysis is unavailable, source-dependent categories
-        // (Error Coverage, Boundary Conditions) cannot detect issues. Their scores
-        // default to 25/25 — but that doesn't mean coverage is perfect, it means
-        // we have no data.
-        //
-        // We scale these categories proportionally: score = natural * 15 / 25.
-        // This means:
-        //   - No issues detected → 25 * 15/25 = 15 (neutral "unknown")
-        //   - Some issues (19/25) → 19 * 15/25 = 11 (deductions still visible)
-        //   - Many issues (10/25) → 10 * 15/25 = 6 (severe deductions preserved)
-        //
-        // This preserves the relative impact of detected issues rather than hiding
-        // them behind a flat cap, while still preventing "no source = perfect score."
         let has_source = source_content_ref.is_some();
         if !has_source && !tests.is_empty() {
-            const NO_SOURCE_BASELINE: u32 = 15;
-            const MAX_CATEGORY: u32 = 25;
-            breakdown.error_coverage =
-                ((breakdown.error_coverage as u32 * NO_SOURCE_BASELINE) / MAX_CATEGORY) as u8;
-            breakdown.boundary_conditions =
-                ((breakdown.boundary_conditions as u32 * NO_SOURCE_BASELINE) / MAX_CATEGORY) as u8;
+            scale_no_source_categories(&mut breakdown);
         }
 
         let score = ScoreCalculator::calculate_weighted(&breakdown, test_type);
@@ -426,14 +428,7 @@ impl AnalysisEngine {
 
                 // Apply no-source proportional scaling to per-test breakdown too
                 if !has_source {
-                    const NO_SOURCE_BASELINE: u32 = 15;
-                    const MAX_CATEGORY: u32 = 25;
-                    breakdown_t.error_coverage = ((breakdown_t.error_coverage as u32
-                        * NO_SOURCE_BASELINE)
-                        / MAX_CATEGORY) as u8;
-                    breakdown_t.boundary_conditions = ((breakdown_t.boundary_conditions as u32
-                        * NO_SOURCE_BASELINE)
-                        / MAX_CATEGORY) as u8;
+                    scale_no_source_categories(&mut breakdown_t);
                 }
 
                 let score_t = ScoreCalculator::calculate_weighted(&breakdown_t, test_type);
@@ -627,18 +622,27 @@ mod tests {
 
         assert_eq!(result.stats.total_tests, 1);
         assert_eq!(result.stats.total_assertions, 1);
-        // This file has trivial assertions and vague test names.
-        // Without source analysis, source-dependent categories (error coverage, boundary)
-        // default to high scores, inflating the total. This is mitigated by proportional
-        // no-source scaling (see CHANGELOG v1.0.1: "Fixed no source = free points").
+        // File with trivial assertion (expect(1).toBe(1)) and vague test name ("should work").
+        // No source analysis → error coverage and boundary scaled to 15/25.
+        // Assertion quality degraded by TrivialAssertion. VagueTestName adds penalty.
+        // Expected range: roughly 40-70 (D to low C).
         assert!(
-            result.score.value <= 100,
-            "score should be bounded, got {}",
+            result.score.value >= 30 && result.score.value <= 75,
+            "trivial single-test file should score 30-75, got {}",
             result.score.value
         );
         assert!(
             !result.issues.is_empty(),
             "should detect trivial assertion and/or vague test name issues"
+        );
+        // Verify the specific issues we expect for this code
+        let has_trivial = result
+            .issues
+            .iter()
+            .any(|i| i.rule == crate::Rule::TrivialAssertion);
+        assert!(
+            has_trivial,
+            "should detect trivial assertion (expect(1).toBe(1))"
         );
     }
 
@@ -667,28 +671,31 @@ mod tests {
             !result.issues.is_empty(),
             "should report weak/trivial issues"
         );
-        // With v2 scoring (no double-counting), category-affecting issues like
-        // WeakAssertion reduce the assertion quality category but don't add penalty.
-        // Penalty-only issues (VagueTestName) still reduce the final score.
-        // The score remains high because source-dependent categories default to good
-        // without source analysis (mitigated by proportional no-source scaling in v1.0.1).
+        // Two tests with weak assertions (toBeDefined, toBeTruthy) and vague names ("test 1", "test 2").
+        // Second test has trivial assertion (expect(1).toBe(1)). No source analysis.
+        // VagueTestName adds penalty-only deductions. WeakAssertion reduces assertion quality category.
+        // Expected range: 30-70 (D to low C). Should NOT be above 75.
         assert!(
-            result.score.value >= 20 && result.score.value <= 100,
-            "score should be bounded for this file, got {}",
+            result.score.value >= 25 && result.score.value <= 70,
+            "weak-assertion file with vague names should score 25-70, got {}",
             result.score.value
         );
-        // Verify that the expected issue types are detected
-        let has_quality_issues = result.issues.iter().any(|i| {
-            matches!(
-                i.rule,
-                crate::Rule::WeakAssertion
-                    | crate::Rule::TrivialAssertion
-                    | crate::Rule::VagueTestName
-            )
-        });
+        // Verify specific issue types
+        let has_weak = result
+            .issues
+            .iter()
+            .any(|i| i.rule == crate::Rule::WeakAssertion);
+        let has_vague = result
+            .issues
+            .iter()
+            .any(|i| i.rule == crate::Rule::VagueTestName);
         assert!(
-            has_quality_issues,
-            "should detect weak/trivial/vague issues"
+            has_weak,
+            "should detect weak assertions (toBeDefined, toBeTruthy)"
+        );
+        assert!(
+            has_vague,
+            "should detect vague test names ('test 1', 'test 2')"
         );
     }
 
@@ -962,6 +969,149 @@ mod tests {
         "#,
         );
         let result = engine.analyze(file.path(), None);
-        assert!(result.is_ok());
+        assert!(
+            result.is_ok(),
+            "default engine should analyze without error"
+        );
+        let result = result.unwrap();
+        assert_eq!(result.stats.total_tests, 1);
+        assert_eq!(result.stats.total_assertions, 1);
+        assert!(
+            !result.issues.is_empty(),
+            "default engine should still detect trivial assertion issues"
+        );
+    }
+
+    /// Per-test score proportional scaling: when the file-level cap is lower than the
+    /// aggregated per-test average, each test's display score is scaled proportionally.
+    /// This prevents "all tests B but file is F" confusion.
+    ///
+    /// Formula: ts.score = (ts.score * final_score) / aggregated
+    #[test]
+    fn test_per_test_score_proportional_scaling() {
+        // A file where some tests have assertions but some don't.
+        // Tests with no assertions get floored to 30, dragging the
+        // per-test aggregate below the file-level breakdown score.
+        let file = make_test_file(
+            r#"
+            describe('mixed quality', () => {
+                it('has good assertions', () => {
+                    expect(calculateTotal(10, 20)).toBe(30);
+                    expect(calculateTotal(0, 0)).toBe(0);
+                });
+                it('does nothing useful', () => {
+                    const x = 1;
+                });
+                it('also does nothing', () => {
+                    const y = 2;
+                });
+            });
+        "#,
+        );
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let result = engine.analyze(file.path(), None).unwrap();
+
+        // Verify we have per-test scores
+        let test_scores = result
+            .test_scores
+            .as_ref()
+            .expect("should have per-test scores");
+        assert_eq!(test_scores.len(), 3, "should have 3 test scores");
+
+        // The no-assertion tests should score at most 30 (the floor).
+        for ts in test_scores.iter().filter(|ts| {
+            ts.issues
+                .iter()
+                .any(|i| i.rule == crate::Rule::NoAssertions)
+        }) {
+            assert!(
+                ts.score <= 30,
+                "no-assertion test '{}' should score at most 30, got {}",
+                ts.name,
+                ts.score
+            );
+        }
+
+        // File-level score should be no higher than the aggregated per-test average
+        // (which is pulled down by the no-assertion tests).
+        // The transparent breakdown should record the per-test aggregation if it
+        // changed the final score.
+        if let Some(ref tb) = result.transparent_breakdown {
+            assert!(
+                tb.final_score <= result.score.value + 1, // allow rounding
+                "transparent breakdown final ({}) should match score ({})",
+                tb.final_score,
+                result.score.value
+            );
+        }
+
+        // The good test should score higher than the no-assertion tests
+        let good_test = test_scores
+            .iter()
+            .find(|ts| ts.name.contains("good assertions"));
+        let bad_tests: Vec<_> = test_scores
+            .iter()
+            .filter(|ts| ts.name.contains("nothing"))
+            .collect();
+        if let Some(good) = good_test {
+            for bad in &bad_tests {
+                assert!(
+                    good.score >= bad.score,
+                    "good test ({}) should score >= no-assertion test ({})",
+                    good.score,
+                    bad.score
+                );
+            }
+        }
+    }
+
+    /// Verify the scale_no_source_categories helper produces expected values.
+    #[test]
+    fn test_scale_no_source_categories() {
+        use crate::ScoreBreakdown;
+
+        // Perfect scores get scaled to 15
+        let mut b = ScoreBreakdown {
+            assertion_quality: 25,
+            error_coverage: 25,
+            boundary_conditions: 25,
+            test_isolation: 25,
+            input_variety: 25,
+            ai_smells: 25,
+        };
+        scale_no_source_categories(&mut b);
+        assert_eq!(b.error_coverage, 15, "25 * 15/25 = 15");
+        assert_eq!(b.boundary_conditions, 15, "25 * 15/25 = 15");
+        // Other categories should be unchanged
+        assert_eq!(b.assertion_quality, 25);
+        assert_eq!(b.test_isolation, 25);
+        assert_eq!(b.input_variety, 25);
+
+        // Partially degraded scores get scaled proportionally
+        let mut b2 = ScoreBreakdown {
+            assertion_quality: 20,
+            error_coverage: 19,
+            boundary_conditions: 10,
+            test_isolation: 22,
+            input_variety: 18,
+            ai_smells: 25,
+        };
+        scale_no_source_categories(&mut b2);
+        assert_eq!(b2.error_coverage, 11, "19 * 15/25 = 11 (truncated)");
+        assert_eq!(b2.boundary_conditions, 6, "10 * 15/25 = 6");
+
+        // Zero stays zero
+        let mut b3 = ScoreBreakdown {
+            assertion_quality: 0,
+            error_coverage: 0,
+            boundary_conditions: 0,
+            test_isolation: 0,
+            input_variety: 0,
+            ai_smells: 0,
+        };
+        scale_no_source_categories(&mut b3);
+        assert_eq!(b3.error_coverage, 0);
+        assert_eq!(b3.boundary_conditions, 0);
     }
 }

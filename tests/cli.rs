@@ -91,17 +91,17 @@ fn subcommand_init_no_panic() {
 
 #[test]
 fn threshold_at_exact_boundary() {
-    // auth.test.ts scores 76 (from regression baseline); threshold at or below should pass
+    // auth.test.ts scores 91 (from regression baseline); threshold at or below should pass
     let mut cmd = rigor_cmd();
-    cmd.arg(AUTH_TEST).arg("--threshold").arg("76");
+    cmd.arg(AUTH_TEST).arg("--threshold").arg("91");
     cmd.assert().success();
 }
 
 #[test]
 fn threshold_one_above_score_fails() {
-    // auth.test.ts scores 76; threshold 77 (one above) should fail
+    // auth.test.ts scores 91; threshold 92 (one above) should fail
     let mut cmd = rigor_cmd();
-    cmd.arg(AUTH_TEST).arg("--threshold").arg("77");
+    cmd.arg(AUTH_TEST).arg("--threshold").arg("92");
     cmd.assert().failure().code(1);
 }
 
