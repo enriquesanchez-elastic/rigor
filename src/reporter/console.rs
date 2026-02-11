@@ -124,39 +124,8 @@ impl ConsoleReporter {
                     cat.weighted_contribution
                 );
             }
-            let after_penalty = (tb.total_before_penalties as i32 - tb.penalty_total).max(0) as u8;
-
-            if let Some(aggregated) = tb.per_test_aggregated {
-                // The per-test aggregation changed the final score.
-                // Show the full pipeline so the math adds up for the user.
-                println!(
-                    "   {} before penalties, −{} penalty → {}",
-                    tb.total_before_penalties.to_string().dimmed(),
-                    tb.penalty_total.to_string().dimmed(),
-                    after_penalty.to_string().dimmed(),
-                );
-                if aggregated < after_penalty {
-                    // Per-test average pulled score DOWN (e.g. no-assertion floors)
-                    println!(
-                        "   per-test average {} → final {}",
-                        aggregated.to_string().dimmed(),
-                        tb.final_score.to_string().bold()
-                    );
-                } else {
-                    // Per-test average was higher, capped by breakdown score
-                    println!(
-                        "   per-test average {} capped by breakdown → final {}",
-                        aggregated.to_string().dimmed(),
-                        tb.final_score.to_string().bold()
-                    );
-                }
-            } else {
-                println!(
-                    "   {} before penalties, −{} penalty → {}",
-                    tb.total_before_penalties.to_string().dimmed(),
-                    tb.penalty_total.to_string().dimmed(),
-                    tb.final_score.to_string().bold()
-                );
+            for line in Self::format_breakdown_summary(tb) {
+                println!("   {}", line);
             }
         } else {
             let categories = [
@@ -180,6 +149,42 @@ impl ConsoleReporter {
             }
         }
         println!();
+    }
+
+    /// Format the breakdown summary lines (penalties + per-test aggregation).
+    /// Returns plain-text lines without color codes for testability.
+    ///
+    /// Three display paths:
+    /// 1. **Per-test pulled down**: per-test average < penalty-adjusted score → score reduced
+    /// 2. **Per-test capped**: per-test average > penalty-adjusted score → capped by breakdown
+    /// 3. **Simple penalty**: no per-test aggregation effect, just penalty math
+    fn format_breakdown_summary(tb: &crate::TransparentBreakdown) -> Vec<String> {
+        let after_penalty = (tb.total_before_penalties as i32 - tb.penalty_total).max(0) as u8;
+        let mut lines = Vec::new();
+
+        if let Some(aggregated) = tb.per_test_aggregated {
+            lines.push(format!(
+                "{} before penalties, −{} penalty → {}",
+                tb.total_before_penalties, tb.penalty_total, after_penalty
+            ));
+            if aggregated < after_penalty {
+                lines.push(format!(
+                    "per-test average {} → final {}",
+                    aggregated, tb.final_score
+                ));
+            } else {
+                lines.push(format!(
+                    "per-test average {} capped by breakdown → final {}",
+                    aggregated, tb.final_score
+                ));
+            }
+        } else {
+            lines.push(format!(
+                "{} before penalties, −{} penalty → {}",
+                tb.total_before_penalties, tb.penalty_total, tb.final_score
+            ));
+        }
+        lines
     }
 
     fn print_test_scores_weakest_first(&self, test_scores: &[TestScore]) {
@@ -361,5 +366,112 @@ impl ConsoleReporter {
 impl Default for ConsoleReporter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TransparentBreakdown;
+
+    fn make_tb(
+        total_before: u8,
+        penalty: i32,
+        final_score: u8,
+        per_test_agg: Option<u8>,
+    ) -> TransparentBreakdown {
+        TransparentBreakdown {
+            categories: vec![],
+            total_before_penalties: total_before,
+            penalty_total: penalty,
+            penalty_from_errors: 0,
+            penalty_from_warnings: 0,
+            penalty_from_info: 0,
+            final_score,
+            per_test_aggregated: per_test_agg,
+        }
+    }
+
+    /// Path 1: Per-test average pulled score DOWN (e.g. no-assertion tests floor at 30).
+    /// Shows: "90 before penalties, −0 penalty → 90" then "per-test average 50 → final 50"
+    #[test]
+    fn breakdown_summary_per_test_pulled_down() {
+        // total_before=90, penalty=0 → after_penalty=90, aggregated=50 < 90
+        let tb = make_tb(90, 0, 50, Some(50));
+        let lines = ConsoleReporter::format_breakdown_summary(&tb);
+
+        assert_eq!(lines.len(), 2, "pulled-down path should have 2 lines");
+        assert!(
+            lines[0].contains("90 before penalties"),
+            "first line: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("per-test average 50") && lines[1].contains("→ final 50"),
+            "should show per-test average pulling score down: {}",
+            lines[1]
+        );
+        // Must NOT contain "capped"
+        assert!(
+            !lines[1].contains("capped"),
+            "pulled-down path should not say 'capped': {}",
+            lines[1]
+        );
+    }
+
+    /// Path 2: Per-test average higher than breakdown, capped by breakdown.
+    /// Shows: "80 before penalties, −5 penalty → 75" then "per-test average 85 capped by breakdown → final 75"
+    #[test]
+    fn breakdown_summary_per_test_capped() {
+        // total_before=80, penalty=5 → after_penalty=75, aggregated=85 > 75
+        let tb = make_tb(80, 5, 75, Some(85));
+        let lines = ConsoleReporter::format_breakdown_summary(&tb);
+
+        assert_eq!(lines.len(), 2, "capped path should have 2 lines");
+        assert!(
+            lines[0].contains("80 before penalties") && lines[0].contains("−5 penalty"),
+            "first line: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("per-test average 85")
+                && lines[1].contains("capped by breakdown")
+                && lines[1].contains("→ final 75"),
+            "should show per-test average capped: {}",
+            lines[1]
+        );
+    }
+
+    /// Path 3: Simple penalty — no per-test aggregation effect.
+    /// Shows: "85 before penalties, −10 penalty → 75"
+    #[test]
+    fn breakdown_summary_simple_penalty() {
+        let tb = make_tb(85, 10, 75, None);
+        let lines = ConsoleReporter::format_breakdown_summary(&tb);
+
+        assert_eq!(lines.len(), 1, "simple penalty path should have 1 line");
+        assert!(
+            lines[0].contains("85 before penalties")
+                && lines[0].contains("−10 penalty")
+                && lines[0].contains("→ 75"),
+            "should show simple penalty math: {}",
+            lines[0]
+        );
+    }
+
+    /// Edge case: zero penalties and no per-test aggregation.
+    #[test]
+    fn breakdown_summary_no_penalties_no_aggregation() {
+        let tb = make_tb(92, 0, 92, None);
+        let lines = ConsoleReporter::format_breakdown_summary(&tb);
+
+        assert_eq!(lines.len(), 1);
+        assert!(
+            lines[0].contains("92 before penalties")
+                && lines[0].contains("−0 penalty")
+                && lines[0].contains("→ 92"),
+            "should show clean pass-through: {}",
+            lines[0]
+        );
     }
 }

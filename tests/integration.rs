@@ -19,10 +19,9 @@ fn analyze(test_path: &str) -> rigor::AnalysisResult {
 #[test]
 fn good_test_scores_b_or_above() {
     let r = analyze("test-repos/fake-project/tests/auth.test.ts");
-    // With Phase 2.2 rules enabled, auth.test.ts may score in the C range; require at least 75.
     assert!(
-        r.score.value >= 75,
-        "auth.test.ts = {} ({})",
+        r.score.value >= 80,
+        "auth.test.ts = {} ({}). Expected B or above.",
         r.score.value,
         r.score.grade
     );
@@ -240,10 +239,10 @@ fn rtl_patterns_detected() {
     );
 }
 
-// --- Phase 2.2 rules: implemented but excluded from category scoring (penalty only) ---
+// --- Phase 2.2 rules: penalty-only (produce issues, affect score via penalties, not categories) ---
 
 #[test]
-fn phase_2_2_rules_excluded_from_category_scoring() {
+fn phase_2_2_rules_are_penalty_only() {
     use rigor::rule_scoring_category;
     let phase_2_2_rules = [
         Rule::TestComplexity,
@@ -260,7 +259,7 @@ fn phase_2_2_rules_excluded_from_category_scoring() {
     for rule in &phase_2_2_rules {
         assert!(
             rule_scoring_category(rule).is_none(),
-            "Phase 2.2 rule {:?} must be excluded from category scoring (penalty only)",
+            "Phase 2.2 rule {:?} should be penalty-only (not mapped to a category)",
             rule
         );
     }
@@ -382,14 +381,62 @@ fn debug_code_should_score_below_65() {
 }
 
 #[test]
-fn auth_good_test_should_score_above_75() {
+fn auth_good_test_should_score_above_85() {
     let r = analyze("test-repos/fake-project/tests/auth.test.ts");
     assert!(
-        r.score.value >= 75,
-        "Well-written test file scored {}/{}. Expected >= 75 (B- or above).",
+        r.score.value >= 85,
+        "Well-written test file scored {}/{}. Expected >= 85 (B or above).",
         r.score.value,
         r.score.grade
     );
+}
+
+/// Diagnostic: print auth.test.ts full analysis for calibration review.
+/// Run with: cargo test --test integration auth_diagnostic -- --ignored --nocapture
+#[test]
+#[ignore]
+fn auth_diagnostic() {
+    let r = analyze("test-repos/fake-project/tests/auth.test.ts");
+    println!("Score: {} ({})", r.score.value, r.score.grade);
+    println!(
+        "Breakdown: aq={} ec={} bc={} ti={} iv={} ai={}",
+        r.breakdown.assertion_quality,
+        r.breakdown.error_coverage,
+        r.breakdown.boundary_conditions,
+        r.breakdown.test_isolation,
+        r.breakdown.input_variety,
+        r.breakdown.ai_smells,
+    );
+    if let Some(ref tb) = r.transparent_breakdown {
+        println!(
+            "Before penalties: {}, penalty: {}, final: {}",
+            tb.total_before_penalties, tb.penalty_total, tb.final_score
+        );
+        if let Some(agg) = tb.per_test_aggregated {
+            println!("Per-test aggregated: {}", agg);
+        }
+    }
+    println!("Source file: {:?}", r.source_file);
+    println!("Issues ({}):", r.issues.len());
+    for i in &r.issues {
+        println!(
+            "  L{}: {} ({:?}) - {}",
+            i.location.line, i.rule, i.severity, i.message
+        );
+    }
+    if let Some(ref ts) = r.test_scores {
+        println!("Per-test scores:");
+        for t in ts {
+            println!(
+                "  {} (L{}): {} ({}) - {} issues",
+                t.name,
+                t.line,
+                t.score,
+                t.grade,
+                t.issues.len()
+            );
+        }
+    }
 }
 
 #[test]

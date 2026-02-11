@@ -8,7 +8,8 @@
 //!   StateVerification, ReturnPathCoverage, BehavioralCompleteness, SideEffectNotVerified.
 //! - **Penalty only** (not category): DebugCode, FocusedTest, SkippedTest, EmptyTest, FlakyPattern,
 //!   MockAbuse, SnapshotOveruse, VagueTestName, MissingAwait, RtlPreferScreen, RtlPreferSemantic,
-//!   RtlPreferUserEvent. See `crate::rule_scoring_category` for the mapping.
+//!   RtlPreferUserEvent, and all Phase 2.2 rules (TestComplexity, VacuousTest, etc.).
+//!   See `crate::rule_scoring_category` for the mapping.
 
 use crate::{
     rule_scoring_category, CategoryBreakdownEntry, Grade, Issue, Rule, Score, ScoreBreakdown,
