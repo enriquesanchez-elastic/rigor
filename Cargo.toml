@@ -3,7 +3,7 @@ members = ["rigor-lsp"]
 
 [package]
 name = "rigor"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 description = "Test Quality Analyzer for TypeScript"
 authors = ["Enrique Sanchez"]
