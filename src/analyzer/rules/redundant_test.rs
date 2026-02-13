@@ -40,8 +40,7 @@ impl RedundantTestRule {
             .iter()
             .map(|a| {
                 // Normalize whitespace to avoid trivial formatting differences
-                let normalized: String =
-                    a.raw.split_whitespace().collect::<Vec<_>>().join(" ");
+                let normalized: String = a.raw.split_whitespace().collect::<Vec<_>>().join(" ");
                 // Truncate to bound signature length for very complex assertions
                 if normalized.len() > 120 {
                     normalized[..120].to_string()

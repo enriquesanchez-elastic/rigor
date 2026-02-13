@@ -265,7 +265,8 @@ mod tests {
         // and test has: expect(instance.name).toBe('ParseError')
         // the mutation should be considered verified.
         let rule = SideEffectVerificationRule::new();
-        let test_source = "const instance = new ParseError('msg'); expect(instance.name).toBe('ParseError');";
+        let test_source =
+            "const instance = new ParseError('msg'); expect(instance.name).toBe('ParseError');";
         assert!(
             rule.test_verifies_mutation_target(test_source, "this.name"),
             "expect(instance.name) should verify mutation target 'this.name'"
