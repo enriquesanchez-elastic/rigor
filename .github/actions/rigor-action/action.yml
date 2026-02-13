@@ -48,13 +48,41 @@ runs:
         # Verify the binary actually works
         rigor --version
 
+    - name: Find changed test files
+      id: changed
+      shell: bash
+      run: |
+        # In a PR, diff against the base branch; otherwise fall back to HEAD~1
+        if [ -n "$GITHUB_BASE_REF" ]; then
+          BASE="origin/$GITHUB_BASE_REF"
+        else
+          BASE="HEAD~1"
+        fi
+        echo "rigor: diffing against $BASE"
+
+        # Collect changed test files (added/modified only, not deleted)
+        TEST_FILES=$(git diff --name-only --diff-filter=ACM "$BASE"...HEAD -- \
+          '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' '*.cy.ts' '*.cy.tsx' \
+          '*.test.js' '*.test.jsx' '*.spec.js' '*.spec.jsx' | tr '\n' ' ')
+
+        echo "rigor: changed test files: ${TEST_FILES:-<none>}"
+        echo "test_files=$TEST_FILES" >> "$GITHUB_OUTPUT"
+
     - name: Run Rigor (JSON)
       id: rigor
       shell: bash
       run: |
+        TEST_FILES="${{ steps.changed.outputs.test_files }}"
+
+        if [ -z "$TEST_FILES" ]; then
+          echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
+          echo "rigor: no changed test files to analyze"
+          exit 0
+        fi
+
         # Run analysis; exit code 1 = threshold failure (expected), other = real error
         set +e
-        rigor . --json --changed > rigor-output.json
+        rigor $TEST_FILES --json > rigor-output.json
         EXIT_CODE=$?
         set -e
 
@@ -66,17 +94,18 @@ runs:
           exit $EXIT_CODE
         fi
 
-        # Handle "no changed test files" as a known-good state
-        if [ ! -s rigor-output.json ]; then
-          echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
-          echo "rigor: no test files changed"
-        fi
-
     - name: Run Rigor (SARIF)
       if: inputs.upload-sarif == 'true'
       shell: bash
       run: |
-        rigor . --sarif --changed > rigor.sarif || {
+        TEST_FILES="${{ steps.changed.outputs.test_files }}"
+
+        if [ -z "$TEST_FILES" ]; then
+          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
+          exit 0
+        fi
+
+        rigor $TEST_FILES --sarif > rigor.sarif || {
           echo "::warning::SARIF generation failed; skipping upload"
           echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
         }
