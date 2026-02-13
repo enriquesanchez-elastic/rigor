@@ -19,6 +19,7 @@ runs:
     - name: Install Rigor
       shell: bash
       env:
+        GH_TOKEN: ${{ github.token }}
         GH_REPO: enriquesanchez-elastic/rigor
         RIGOR_VERSION: ${{ inputs.rigor-version }}
       run: |
