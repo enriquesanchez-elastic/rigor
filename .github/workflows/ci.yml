@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 0.1.0)'
-        required: true
+        description: 'Version to release (e.g., 1.0.6). Leave empty to auto-detect from Cargo.toml.'
+        required: false
         type: string
 
 env:
@@ -86,32 +86,82 @@ jobs:
       - name: Print coverage summary
         run: cargo llvm-cov report
 
-  # When triggered manually, just create a tag (which triggers the build via tag push)
-  create-tag:
-    name: Create Release Tag
-    needs: test
-    if: github.event_name == 'workflow_dispatch'
+  # Determines whether a release should happen, regardless of trigger type.
+  # Outputs the version, tag name, and prerelease flag for downstream jobs.
+  check-release:
+    name: Check Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Configure Git
+      - name: Determine release info
+        id: check
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 1) Tag push  → always release with that tag
+          # 2) workflow_dispatch → use input version or auto-detect from Cargo.toml
+          # 3) Push to main → auto-detect from Cargo.toml, release only if tag is new
 
-      - name: Create and push tag
-        run: |
-          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
-          git push origin "v${{ github.event.inputs.version }}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Trigger: tag push ($TAG)"
 
-  # Build only runs on tag pushes (not workflow_dispatch - that just creates the tag)
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            INPUT_VERSION="${{ github.event.inputs.version }}"
+            if [[ -n "$INPUT_VERSION" ]]; then
+              VERSION="$INPUT_VERSION"
+            else
+              VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+            fi
+            TAG="v$VERSION"
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "Tag $TAG already exists. Skipping release."
+            else
+              echo "should_release=true" >> $GITHUB_OUTPUT
+            fi
+            echo "Trigger: workflow_dispatch (version=$VERSION)"
+
+          else
+            # Push to main — auto-detect version from Cargo.toml
+            VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+            TAG="v$VERSION"
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "Tag $TAG already exists. No new release."
+            else
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "New version detected: $VERSION"
+            fi
+            echo "Trigger: push to main"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Prerelease detection
+          if [[ "$TAG" == *"-alpha"* ]] || [[ "$TAG" == *"-beta"* ]] || [[ "$TAG" == *"-rc"* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "--- Release decision ---"
+          echo "Version: $VERSION"
+          echo "Tag:     $TAG"
+
   build:
     name: Build ${{ matrix.target }}
-    needs: test
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [test, check-release]
+    if: needs.check-release.outputs.should_release == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -198,22 +248,28 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [build, check-release]
+    if: needs.check-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Determine release tag
-        id: tag
+      - name: Create tag if needed
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          if [[ "${GITHUB_REF}" == *"-alpha"* ]] || [[ "${GITHUB_REF}" == *"-beta"* ]] || [[ "${GITHUB_REF}" == *"-rc"* ]]; then
-            echo "prerelease=true" >> $GITHUB_OUTPUT
+          TAG="${{ needs.check-release.outputs.tag }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "Created and pushed tag $TAG"
           else
-            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists"
           fi
 
       - name: Download all artifacts
@@ -245,11 +301,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ needs.check-release.outputs.tag }}
           files: |
             release/*
           generate_release_notes: true
           draft: false
-          prerelease: ${{ steps.tag.outputs.prerelease == 'true' }}
+          prerelease: ${{ needs.check-release.outputs.prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
