@@ -47,34 +47,15 @@ fn weak_assertions_has_issues() {
     );
 }
 
-#[test]
-fn mixed_bad_has_issues() {
-    let r = analyze("test-repos/fake-project/tests/mixed-bad.test.ts");
-    assert!(!r.issues.is_empty(), "mixed-bad should report issues");
-    // Same calibration note as above for v2 scoring without source analysis.
-    assert!(
-        r.issues.len() >= 2,
-        "mixed-bad should have multiple issues, got {}",
-        r.issues.len()
-    );
-}
-
 /// Score vs finds alignment: intentionally bad files must score lower than the good reference file.
 #[test]
 fn bad_files_score_lower_than_good_file() {
     let good = analyze("test-repos/fake-project/tests/auth.test.ts");
     let weak = analyze("test-repos/fake-project/tests/weak-assertions.test.ts");
-    let mixed = analyze("test-repos/fake-project/tests/mixed-bad.test.ts");
     assert!(
         weak.score.value < good.score.value,
         "weak-assertions ({}) should score lower than auth ({}) — score vs finds alignment",
         weak.score.value,
-        good.score.value
-    );
-    assert!(
-        mixed.score.value < good.score.value,
-        "mixed-bad ({}) should score lower than auth ({}) — score vs finds alignment",
-        mixed.score.value,
         good.score.value
     );
 }

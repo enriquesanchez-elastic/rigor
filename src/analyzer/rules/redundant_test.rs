@@ -1,9 +1,14 @@
 //! Redundant test: test duplicates another test's coverage.
 //!
-//! Heuristic: tests are grouped by a normalized assertion signature that includes
-//! both the assertion kind AND the subject being tested (the expression inside
-//! `expect(...)`). This prevents false positives where two tests use the same
-//! assertion kind (e.g. `.toBe()`) but test completely different functions.
+//! Heuristic: tests are grouped by a normalized assertion signature built from
+//! the full assertion text (whitespace-normalized). This ensures that tests
+//! calling the same function with *different* inputs or asserting *different*
+//! expected values produce distinct signatures and are NOT incorrectly grouped.
+//!
+//! Previous approach used only the subject identifier + assertion kind, which
+//! over-grouped: `expect(parsePrice(null)).toThrow(ParseError)` and
+//! `expect(parsePrice('')).toThrow(ParseError)` got the same signature even
+//! though they test completely different error paths.
 //!
 //! A group must have 3+ tests to trigger a flag, since pairs of tests with the
 //! same pattern are common in boundary and error-variant testing.
@@ -25,75 +30,30 @@ impl RedundantTestRule {
         Self
     }
 
-    /// Build a signature that includes the assertion kind AND the subject function/expression.
+    /// Build a signature from the full normalized assertion text.
     ///
-    /// Previous approach used only assertion kind (e.g. "ToBe"), which grouped
-    /// `expect(validateAge(18)).toBe(true)` with `expect(clamp(5,0,10)).toBe(5)`.
-    /// Now includes the subject so they produce different signatures.
+    /// Uses the complete assertion text (whitespace-normalized, truncated) so that
+    /// `expect(fn(1)).toBe(2)` and `expect(fn(2)).toBe(4)` produce distinct
+    /// signatures. Only truly identical assertion sets are grouped together.
     fn assertion_signature(assertions: &[crate::Assertion]) -> String {
         let mut parts: Vec<String> = assertions
             .iter()
             .map(|a| {
-                let subject = Self::extract_subject(&a.raw);
-                format!("{}:{:?}", subject, a.kind)
+                // Normalize whitespace to avoid trivial formatting differences
+                let normalized: String =
+                    a.raw.split_whitespace().collect::<Vec<_>>().join(" ");
+                // Truncate to bound signature length for very complex assertions
+                if normalized.len() > 120 {
+                    normalized[..120].to_string()
+                } else {
+                    normalized
+                }
             })
             .collect();
         parts.sort();
         parts.join("|")
     }
 
-    /// Extract the subject expression from assertion raw text.
-    ///
-    /// Given `expect(validateAge(18)).toBe(true)`, extracts the first identifier
-    /// from the expect argument → `"validateAge"`.
-    /// Given `expect(1).toBe(1)`, returns `"_literal_"`.
-    /// Given `expect(() => authenticate('a', 'b')).toThrow(...)`, extracts `"authenticate"`.
-    fn extract_subject(raw: &str) -> String {
-        // Find the content inside expect(...)
-        let inner = if let Some(start) = raw.find("expect(") {
-            let rest = &raw[start + 7..];
-            let mut depth = 1;
-            let mut end = rest.len();
-            for (i, ch) in rest.char_indices() {
-                match ch {
-                    '(' => depth += 1,
-                    ')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            end = i;
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            &rest[..end]
-        } else {
-            raw
-        };
-
-        // Skip arrow function prefix: "() => "
-        let inner = inner
-            .trim()
-            .trim_start_matches("() =>")
-            .trim_start_matches("async () =>")
-            .trim();
-
-        // Extract first identifier (alphanumeric + underscore + dots for property access)
-        let start = inner.find(|c: char| c.is_ascii_alphabetic() || c == '_');
-        if let Some(start) = start {
-            let ident = &inner[start..];
-            let end = ident
-                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.')
-                .unwrap_or(ident.len());
-            let identifier = &ident[..end];
-            if !identifier.is_empty() {
-                return identifier.to_string();
-            }
-        }
-
-        "_literal_".to_string()
-    }
 }
 
 impl Default for RedundantTestRule {
@@ -183,48 +143,6 @@ mod tests {
     }
 
     #[test]
-    fn extract_subject_function_call() {
-        assert_eq!(
-            RedundantTestRule::extract_subject("expect(validateAge(18)).toBe(true)"),
-            "validateAge"
-        );
-    }
-
-    #[test]
-    fn extract_subject_different_functions() {
-        assert_eq!(
-            RedundantTestRule::extract_subject("expect(clamp(5, 0, 10)).toBe(5)"),
-            "clamp"
-        );
-    }
-
-    #[test]
-    fn extract_subject_arrow_function() {
-        assert_eq!(
-            RedundantTestRule::extract_subject(
-                "expect(() => authenticate('a', 'b')).toThrow(AuthError)"
-            ),
-            "authenticate"
-        );
-    }
-
-    #[test]
-    fn extract_subject_literal() {
-        assert_eq!(
-            RedundantTestRule::extract_subject("expect(1).toBe(1)"),
-            "_literal_"
-        );
-    }
-
-    #[test]
-    fn extract_subject_property_access() {
-        assert_eq!(
-            RedundantTestRule::extract_subject("expect(result.user).toBeDefined()"),
-            "result.user"
-        );
-    }
-
-    #[test]
     fn different_functions_not_flagged() {
         let tests = vec![
             make_test(
@@ -287,7 +205,47 @@ mod tests {
     }
 
     #[test]
-    fn three_same_pattern_flagged() {
+    fn three_identical_assertions_flagged() {
+        // Three tests with IDENTICAL assertion text — truly redundant
+        let tests = vec![
+            make_test(
+                "test 1",
+                vec![make_assertion(
+                    "expect(authenticate('a', 'b')).toBeDefined()",
+                    AssertionKind::ToBeDefined,
+                )],
+            ),
+            make_test(
+                "test 2",
+                vec![make_assertion(
+                    "expect(authenticate('a', 'b')).toBeDefined()",
+                    AssertionKind::ToBeDefined,
+                )],
+            ),
+            make_test(
+                "test 3",
+                vec![make_assertion(
+                    "expect(authenticate('a', 'b')).toBeDefined()",
+                    AssertionKind::ToBeDefined,
+                )],
+            ),
+        ];
+        let rule = RedundantTestRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("x")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+        assert_eq!(
+            issues.len(),
+            2,
+            "3 tests with identical assertions should flag 2 (all but first)"
+        );
+    }
+
+    #[test]
+    fn different_inputs_same_function_not_flagged() {
+        // Tests calling the same function with DIFFERENT arguments are not redundant
         let tests = vec![
             make_test(
                 "test 1",
@@ -317,10 +275,9 @@ mod tests {
             .parse("x")
             .unwrap();
         let issues = rule.analyze(&tests, "", &tree);
-        assert_eq!(
-            issues.len(),
-            2,
-            "3 tests with same pattern should flag 2 (all but first)"
+        assert!(
+            issues.is_empty(),
+            "tests with different inputs should not be flagged as redundant"
         );
     }
 }

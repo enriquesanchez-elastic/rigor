@@ -5,7 +5,7 @@ use crate::parser::{global_query_cache, is_inside_comment_range, QueryId, TypeSc
 use crate::{Issue, Location, Rule, Severity, TestCase};
 use tree_sitter::Tree;
 
-const TYPE_ASSERTION_WARN_THRESHOLD: usize = 3;
+const TYPE_ASSERTION_WARN_THRESHOLD: usize = 5;
 
 /// Rule for detecting type assertion overuse in tests
 pub struct TypeAssertionAbuseRule;
