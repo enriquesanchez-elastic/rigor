@@ -80,35 +80,82 @@ runs:
           exit 0
         fi
 
-        # Run analysis; exit code 1 = threshold failure (expected), other = real error
-        set +e
-        rigor $TEST_FILES --json > rigor-output.json
-        EXIT_CODE=$?
-        set -e
+        # rigor accepts a single PATH, so analyze each file individually
+        mkdir -p .rigor-tmp
+        FILE_COUNT=0
+        WORST_EXIT=0
+        for f in $TEST_FILES; do
+          echo "rigor: analyzing $f"
+          set +e
+          rigor "$f" --json > ".rigor-tmp/result-${FILE_COUNT}.json"
+          EXIT_CODE=$?
+          set -e
 
-        if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 1 ]; then
-          echo "rigor: analysis completed (exit $EXIT_CODE)"
-        else
-          echo "::error::Rigor analysis failed with exit code $EXIT_CODE"
-          cat rigor-output.json || true
-          exit $EXIT_CODE
-        fi
+          if [ $EXIT_CODE -gt 1 ]; then
+            echo "::error::Rigor failed on $f (exit $EXIT_CODE)"
+            cat ".rigor-tmp/result-${FILE_COUNT}.json" || true
+            exit $EXIT_CODE
+          fi
+          [ $EXIT_CODE -gt $WORST_EXIT ] && WORST_EXIT=$EXIT_CODE
+          FILE_COUNT=$((FILE_COUNT + 1))
+        done
+
+        # Merge per-file JSON results into {"results":[...],"summary":{...}}
+        python3 -c "
+        import json, glob, sys
+        results = []
+        for f in sorted(glob.glob('.rigor-tmp/result-*.json')):
+            with open(f) as fh:
+                results.append(json.load(fh))
+        total = sum(r.get('score',{}).get('value',0) for r in results)
+        avg = round(total / len(results)) if results else 0
+        output = {
+            'results': results,
+            'summary': {
+                'filesAnalyzed': len(results),
+                'averageScore': avg
+            }
+        }
+        json.dump(output, sys.stdout, indent=2)
+        " > rigor-output.json
+
+        rm -rf .rigor-tmp
+        echo "rigor: analyzed $FILE_COUNT file(s)"
 
     - name: Run Rigor (SARIF)
       if: inputs.upload-sarif == 'true'
       shell: bash
       run: |
         TEST_FILES="${{ steps.changed.outputs.test_files }}"
+        EMPTY_SARIF='{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}'
 
         if [ -z "$TEST_FILES" ]; then
-          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
+          echo "$EMPTY_SARIF" > rigor.sarif
           exit 0
         fi
 
-        rigor $TEST_FILES --sarif > rigor.sarif || {
-          echo "::warning::SARIF generation failed; skipping upload"
-          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
-        }
+        # Analyze each file individually for SARIF, then merge runs
+        mkdir -p .rigor-tmp-sarif
+        COUNT=0
+        for f in $TEST_FILES; do
+          rigor "$f" --sarif > ".rigor-tmp-sarif/sarif-${COUNT}.json" 2>/dev/null || true
+          COUNT=$((COUNT + 1))
+        done
+
+        # Merge SARIF: combine all "runs" arrays
+        python3 -c "
+        import json, glob, sys
+        merged = {'version':'2.1.0','\$schema':'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json','runs':[]}
+        for f in sorted(glob.glob('.rigor-tmp-sarif/sarif-*.json')):
+            try:
+                with open(f) as fh:
+                    data = json.load(fh)
+                    merged['runs'].extend(data.get('runs',[]))
+            except: pass
+        json.dump(merged, sys.stdout, indent=2)
+        " > rigor.sarif
+
+        rm -rf .rigor-tmp-sarif
 
     - name: Comment PR with results
       if: github.event_name == 'pull_request'
