@@ -53,7 +53,6 @@ impl RedundantTestRule {
         parts.sort();
         parts.join("|")
     }
-
 }
 
 impl Default for RedundantTestRule {
