@@ -2,7 +2,7 @@ name: "Rigor"
 description: "Run Rigor test quality analysis and post PR comment with score and issues"
 inputs:
   rigor-version:
-    description: "Rigor version (e.g. 1.0.0) for npm install"
+    description: "Rigor version tag (e.g. v1.0.4); 'latest' fetches the newest release"
     required: false
     default: "latest"
   comment-threshold:
@@ -18,12 +18,31 @@ runs:
   steps:
     - name: Install Rigor
       shell: bash
+      env:
+        GH_REPO: enriquesanchez-elastic/rigor
+        RIGOR_VERSION: ${{ inputs.rigor-version }}
       run: |
         if command -v rigor >/dev/null 2>&1; then
           echo "rigor: already on PATH ($(rigor --version))"
         else
-          echo "rigor: installing via npm..."
-          npm install -g "rigor-cli@${{ inputs.rigor-version }}"
+          echo "rigor: installing from GitHub release..."
+          if [ "$RIGOR_VERSION" = "latest" ]; then
+            TAG=$(gh release view --repo "$GH_REPO" --json tagName -q .tagName)
+          else
+            TAG="$RIGOR_VERSION"
+          fi
+          # Determine asset name based on runner OS/arch
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64)  ASSET="rigor-linux-x86_64" ;;
+            Linux-aarch64) ASSET="rigor-linux-aarch64" ;;
+            Darwin-x86_64) ASSET="rigor-macos-x86_64" ;;
+            Darwin-arm64)  ASSET="rigor-macos-aarch64" ;;
+            *)             echo "::error::Unsupported platform: $(uname -s)-$(uname -m)"; exit 1 ;;
+          esac
+          gh release download "$TAG" --repo "$GH_REPO" --pattern "$ASSET" --output rigor-bin
+          chmod +x rigor-bin
+          sudo mv rigor-bin /usr/local/bin/rigor
+          echo "rigor: installed $TAG ($ASSET)"
         fi
         # Verify the binary actually works
         rigor --version
