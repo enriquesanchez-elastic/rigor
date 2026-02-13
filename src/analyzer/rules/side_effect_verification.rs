@@ -48,13 +48,24 @@ impl SideEffectVerificationRule {
         self
     }
 
-    /// Check if the mutation target is asserted: it must appear inside expect(...), e.g. expect(cart.items).toContain(...)
+    /// Check if the mutation target is asserted: it must appear inside expect(...),
+    /// e.g. expect(cart.items).toContain(...).
+    ///
+    /// Also handles `this.property` targets from constructors: if the target is
+    /// `this.name`, we also match `instance.name`, `error.name`, etc. — any
+    /// `*.property` pattern inside an expect() argument.
     fn test_verifies_mutation_target(&self, test_source: &str, target: &str) -> bool {
         let source_lower = test_source.to_lowercase();
         let target_lower = target.to_lowercase();
         if target_lower.is_empty() {
             return false;
         }
+
+        // Extract the property name if target is "this.property"
+        let this_property = target_lower
+            .strip_prefix("this.")
+            .map(|prop| format!(".{}", prop));
+
         // Find each expect( ... ) and see if target appears in the argument
         let mut i = 0;
         while let Some(start) = source_lower[i..].find("expect(") {
@@ -70,8 +81,16 @@ impl SideEffectVerificationRule {
                     depth -= 1;
                     if depth == 0 {
                         let arg = &source_lower[expect_start..j];
+                        // Direct match: target appears verbatim in expect()
                         if arg.contains(&target_lower) {
                             return true;
+                        }
+                        // Constructor match: for "this.prop", also match "*.prop"
+                        // e.g., this.name → instance.name, error.name, etc.
+                        if let Some(ref dot_prop) = this_property {
+                            if arg.contains(dot_prop.as_str()) {
+                                return true;
+                            }
                         }
                         break;
                     }
@@ -237,6 +256,30 @@ mod tests {
         assert!(
             issues.iter().any(|i| i.rule == Rule::SideEffectNotVerified),
             "expected SideEffectNotVerified when mutation target not in expect()"
+        );
+    }
+
+    #[test]
+    fn constructor_property_assertion_counts_as_verified() {
+        // When source has: this.name = 'ParseError' (target: "this.name")
+        // and test has: expect(instance.name).toBe('ParseError')
+        // the mutation should be considered verified.
+        let rule = SideEffectVerificationRule::new();
+        let test_source =
+            "const instance = new ParseError('msg'); expect(instance.name).toBe('ParseError');";
+        assert!(
+            rule.test_verifies_mutation_target(test_source, "this.name"),
+            "expect(instance.name) should verify mutation target 'this.name'"
+        );
+    }
+
+    #[test]
+    fn this_property_not_verified_without_expect() {
+        let rule = SideEffectVerificationRule::new();
+        let test_source = "const instance = new ParseError('msg'); console.log(instance.name);";
+        assert!(
+            !rule.test_verifies_mutation_target(test_source, "this.name"),
+            "console.log should not count as verification"
         );
     }
 

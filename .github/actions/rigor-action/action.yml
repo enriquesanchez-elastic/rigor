@@ -2,7 +2,7 @@ name: "Rigor"
 description: "Run Rigor test quality analysis and post PR comment with score and issues"
 inputs:
   rigor-version:
-    description: "Rigor version (e.g. 1.0.0) for npm install"
+    description: "Rigor version tag (e.g. v1.0.4); 'latest' fetches the newest release"
     required: false
     default: "latest"
   comment-threshold:
@@ -18,48 +18,144 @@ runs:
   steps:
     - name: Install Rigor
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: enriquesanchez-elastic/rigor
+        RIGOR_VERSION: ${{ inputs.rigor-version }}
       run: |
         if command -v rigor >/dev/null 2>&1; then
           echo "rigor: already on PATH ($(rigor --version))"
         else
-          echo "rigor: installing via npm..."
-          npm install -g "rigor-cli@${{ inputs.rigor-version }}"
+          echo "rigor: installing from GitHub release..."
+          if [ "$RIGOR_VERSION" = "latest" ]; then
+            TAG=$(gh release view --repo "$GH_REPO" --json tagName -q .tagName)
+          else
+            TAG="$RIGOR_VERSION"
+          fi
+          # Determine asset name based on runner OS/arch
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64)  ASSET="rigor-linux-x86_64" ;;
+            Linux-aarch64) ASSET="rigor-linux-aarch64" ;;
+            Darwin-x86_64) ASSET="rigor-macos-x86_64" ;;
+            Darwin-arm64)  ASSET="rigor-macos-aarch64" ;;
+            *)             echo "::error::Unsupported platform: $(uname -s)-$(uname -m)"; exit 1 ;;
+          esac
+          gh release download "$TAG" --repo "$GH_REPO" --pattern "$ASSET" --output rigor-bin
+          chmod +x rigor-bin
+          sudo mv rigor-bin /usr/local/bin/rigor
+          echo "rigor: installed $TAG ($ASSET)"
         fi
         # Verify the binary actually works
         rigor --version
+
+    - name: Find changed test files
+      id: changed
+      shell: bash
+      run: |
+        # In a PR, diff against the base branch; otherwise fall back to HEAD~1
+        if [ -n "$GITHUB_BASE_REF" ]; then
+          BASE="origin/$GITHUB_BASE_REF"
+        else
+          BASE="HEAD~1"
+        fi
+        echo "rigor: diffing against $BASE"
+
+        # Collect changed test files (added/modified only, not deleted)
+        TEST_FILES=$(git diff --name-only --diff-filter=ACM "$BASE"...HEAD -- \
+          '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' '*.cy.ts' '*.cy.tsx' \
+          '*.test.js' '*.test.jsx' '*.spec.js' '*.spec.jsx' | tr '\n' ' ')
+
+        echo "rigor: changed test files: ${TEST_FILES:-<none>}"
+        echo "test_files=$TEST_FILES" >> "$GITHUB_OUTPUT"
 
     - name: Run Rigor (JSON)
       id: rigor
       shell: bash
       run: |
-        # Run analysis; exit code 1 = threshold failure (expected), other = real error
-        set +e
-        rigor --json --changed > rigor-output.json 2>&1
-        EXIT_CODE=$?
-        set -e
+        TEST_FILES="${{ steps.changed.outputs.test_files }}"
 
-        if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 1 ]; then
-          echo "rigor: analysis completed (exit $EXIT_CODE)"
-        else
-          echo "::error::Rigor analysis failed with exit code $EXIT_CODE"
-          cat rigor-output.json || true
-          exit $EXIT_CODE
-        fi
-
-        # Handle "no changed test files" as a known-good state
-        if [ ! -s rigor-output.json ]; then
+        if [ -z "$TEST_FILES" ]; then
           echo '{"results":[],"summary":{"filesAnalyzed":0,"averageScore":0}}' > rigor-output.json
-          echo "rigor: no test files changed"
+          echo "rigor: no changed test files to analyze"
+          exit 0
         fi
+
+        # rigor accepts a single PATH, so analyze each file individually
+        mkdir -p .rigor-tmp
+        FILE_COUNT=0
+        WORST_EXIT=0
+        for f in $TEST_FILES; do
+          echo "rigor: analyzing $f"
+          set +e
+          rigor "$f" --json > ".rigor-tmp/result-${FILE_COUNT}.json"
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -gt 1 ]; then
+            echo "::error::Rigor failed on $f (exit $EXIT_CODE)"
+            cat ".rigor-tmp/result-${FILE_COUNT}.json" || true
+            exit $EXIT_CODE
+          fi
+          [ $EXIT_CODE -gt $WORST_EXIT ] && WORST_EXIT=$EXIT_CODE
+          FILE_COUNT=$((FILE_COUNT + 1))
+        done
+
+        # Merge per-file JSON results into {"results":[...],"summary":{...}}
+        python3 -c "
+        import json, glob, sys
+        results = []
+        for f in sorted(glob.glob('.rigor-tmp/result-*.json')):
+            with open(f) as fh:
+                results.append(json.load(fh))
+        total = sum(r.get('score',{}).get('value',0) for r in results)
+        avg = round(total / len(results)) if results else 0
+        output = {
+            'results': results,
+            'summary': {
+                'filesAnalyzed': len(results),
+                'averageScore': avg
+            }
+        }
+        json.dump(output, sys.stdout, indent=2)
+        " > rigor-output.json
+
+        rm -rf .rigor-tmp
+        echo "rigor: analyzed $FILE_COUNT file(s)"
 
     - name: Run Rigor (SARIF)
       if: inputs.upload-sarif == 'true'
       shell: bash
       run: |
-        rigor --sarif --changed > rigor.sarif 2>&1 || {
-          echo "::warning::SARIF generation failed; skipping upload"
-          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > rigor.sarif
-        }
+        TEST_FILES="${{ steps.changed.outputs.test_files }}"
+        EMPTY_SARIF='{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}'
+
+        if [ -z "$TEST_FILES" ]; then
+          echo "$EMPTY_SARIF" > rigor.sarif
+          exit 0
+        fi
+
+        # Analyze each file individually for SARIF, then merge runs
+        mkdir -p .rigor-tmp-sarif
+        COUNT=0
+        for f in $TEST_FILES; do
+          rigor "$f" --sarif > ".rigor-tmp-sarif/sarif-${COUNT}.json" 2>/dev/null || true
+          COUNT=$((COUNT + 1))
+        done
+
+        # Merge SARIF: combine all "runs" arrays
+        python3 -c "
+        import json, glob, sys
+        merged = {'version':'2.1.0','\$schema':'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json','runs':[]}
+        for f in sorted(glob.glob('.rigor-tmp-sarif/sarif-*.json')):
+            try:
+                with open(f) as fh:
+                    data = json.load(fh)
+                    merged['runs'].extend(data.get('runs',[]))
+            except: pass
+        json.dump(merged, sys.stdout, indent=2)
+        " > rigor.sarif
+
+        rm -rf .rigor-tmp-sarif
 
     - name: Comment PR with results
       if: github.event_name == 'pull_request'

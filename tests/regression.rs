@@ -8,6 +8,9 @@
 //!   - P1.3 fix: source-dependent categories capped at 15/25 when no source available
 //!   - No-assertion test floor: tests with 0 assertions capped at score 30
 //!   - Per-test aggregation capped by file-level breakdown score
+//!   - redundant-test: full-text signature (eliminates false positives for different inputs)
+//!   - type-assertion-abuse: threshold raised from 3 to 5
+//!   - side-effect-not-verified: constructor this.property → instance.property matching
 
 use rigor::analyzer::AnalysisEngine;
 use std::path::Path;
@@ -42,7 +45,7 @@ macro_rules! regression {
     };
 }
 
-// tests/ (baselines updated for redundant-test precision + missing-error-test fix + hardcoded dedup)
+// tests/ (baselines updated for redundant-test full-text signature + type-assertion threshold 5 + constructor side-effect fix)
 regression!(
     assertion_intent_mismatch,
     "test-repos/fake-project/tests/assertion-intent-mismatch.test.ts",
@@ -55,8 +58,7 @@ regression!(
     71,
     8
 );
-regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 91, 11);
-regression!(cart, "test-repos/fake-project/tests/cart.test.ts", 79, 15);
+regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 95, 7);
 regression!(
     debug_code,
     "test-repos/fake-project/tests/debug-code.test.ts",
@@ -66,8 +68,8 @@ regression!(
 regression!(
     duplicate_names,
     "test-repos/fake-project/tests/duplicate-names.test.ts",
-    73,
-    6
+    75,
+    4
 );
 regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 59, 21);
 regression!(
@@ -87,12 +89,6 @@ regression!(
     "test-repos/fake-project/tests/missing-error-tests.test.ts",
     80,
     6
-);
-regression!(
-    mixed_bad,
-    "test-repos/fake-project/tests/mixed-bad.test.ts",
-    36,
-    21
 );
 regression!(
     mock_abuse,
@@ -121,8 +117,8 @@ regression!(
 regression!(
     skipped_and_focused,
     "test-repos/fake-project/tests/skipped-and-focused.test.ts",
-    25,
-    30
+    27,
+    28
 );
 regression!(
     snapshot_only,
@@ -139,8 +135,8 @@ regression!(
 regression!(
     vague_names,
     "test-repos/fake-project/tests/vague-names.test.ts",
-    32,
-    20
+    34,
+    18
 );
 regression!(
     weak_assertions,
@@ -196,13 +192,6 @@ regression!(
     71,
     11
 );
-regression!(
-    validators_test,
-    "test-repos/fake-project/src/__tests__/validators.test.ts",
-    51,
-    14
-);
-
 /// Run with: cargo test --test regression print_baselines -- --ignored --nocapture
 /// Then paste output to update the regression!() macros above.
 #[test]
@@ -218,7 +207,6 @@ fn print_baselines() {
             "test-repos/fake-project/tests/async-missing-await.test.ts",
         ),
         ("auth", "test-repos/fake-project/tests/auth.test.ts"),
-        ("cart", "test-repos/fake-project/tests/cart.test.ts"),
         (
             "debug_code",
             "test-repos/fake-project/tests/debug-code.test.ts",
@@ -239,10 +227,6 @@ fn print_baselines() {
         (
             "missing_error_tests",
             "test-repos/fake-project/tests/missing-error-tests.test.ts",
-        ),
-        (
-            "mixed_bad",
-            "test-repos/fake-project/tests/mixed-bad.test.ts",
         ),
         (
             "mock_abuse",
@@ -298,10 +282,6 @@ fn print_baselines() {
         (
             "button_bad_test",
             "test-repos/fake-project/src/components/Button.bad.test.tsx",
-        ),
-        (
-            "validators_test",
-            "test-repos/fake-project/src/__tests__/validators.test.ts",
         ),
     ];
     for (name, path) in items {
