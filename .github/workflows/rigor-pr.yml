@@ -4,6 +4,11 @@ name: Rigor PR
 on:
   pull_request:
     paths: ['**.test.ts', '**.test.tsx', '**.spec.ts', '**.spec.tsx', '**.cy.ts', '**.cy.tsx']
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
 jobs:
   rigor:
     runs-on: ubuntu-latest
@@ -11,9 +16,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
       - uses: ./.github/actions/rigor-action
         with:
           upload-sarif: 'true'
