@@ -43,7 +43,8 @@ impl RedundantTestRule {
                 let normalized: String = a.raw.split_whitespace().collect::<Vec<_>>().join(" ");
                 // Truncate to bound signature length for very complex assertions
                 if normalized.len() > 120 {
-                    normalized[..120].to_string()
+                    let end = normalized.floor_char_boundary(120);
+                    normalized[..end].to_string()
                 } else {
                     normalized
                 }
