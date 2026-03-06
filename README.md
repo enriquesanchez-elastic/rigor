@@ -68,7 +68,7 @@ rigor src/ --watch
 | **Flaky Patterns** | `Date.now()`, `Math.random()`, unmocked fetch |
 | **React Testing Library** | `querySelector` vs `getByRole`, `fireEvent` vs `userEvent` |
 
-See [docs/rules.md](docs/rules.md) for the full list of 38+ rules.
+See [docs/rules.md](docs/rules.md) for the full list of 34 rules.
 
 ## Output
 
@@ -126,8 +126,8 @@ echo 'test source...' | rigor --stdin --stdin-filename test.test.ts --json
 
 Node.js SDK (`@rigor/sdk`):
 ```typescript
-import { analyzeFile, analyzeSource } from '@rigor/sdk';
-const result = await analyzeFile('src/auth.test.ts');
+import { analyze, analyzeSource } from '@rigor/sdk';
+const result = await analyze('src/auth.test.ts');
 console.log(result.score, result.issues);
 ```
 
@@ -231,12 +231,12 @@ Install the `vscode-rigor` extension for inline diagnostics powered by the `rigo
 
 ### LSP
 
-The `rigor-lsp` binary works with any LSP-compatible editor (Neovim, Helix, etc.).
+The `rigor-lsp` binary works with any LSP-compatible editor (Neovim, Helix, etc.). Build from source with `cargo build --release`; the binary is at `target/release/rigor-lsp`.
 
 ## Documentation
 
 - [Configuration](docs/configuration.md) - All config options, extends, overrides
-- [Rules Reference](docs/rules.md) - All 38+ rules with descriptions
+- [Rules Reference](docs/rules.md) - All 34 rules with descriptions
 - [Scoring](docs/scoring.md) - How scores are calculated
 - [API Reference](docs/api.md) - JSON contract, stdin, Rust API, Node.js SDK
 - [MCP Integration](docs/mcp-integration.md) - Setup for Cursor, Continue, Cline

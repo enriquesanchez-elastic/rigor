@@ -52,11 +52,11 @@ Issues reduce your score:
 
 | Severity | Penalty | Max Total |
 |----------|---------|-----------|
-| Error | 5 points each | 35 |
-| Warning | 2 points each | 40 |
+| Error | 7 points each | 50 |
+| Warning | 3 points each | 40 |
 | Info | 1 point each | 15 |
 
-Maximum total penalty is 90 points.
+Maximum total penalty is 105 points (clamped so final score stays 0–100).
 
 ## Example
 
@@ -71,12 +71,12 @@ A unit test file with:
 
 **Step 2: Issue penalty**
 ```
-0×5 + 3×2 + 2×1 = 8
+0×7 + 3×3 + 2×1 = 11
 ```
 
 **Step 3: Final score**
 ```
-78 - 8 = 70 (Grade: C)
+78 - 11 = 67 (Grade: D)
 ```
 
 ## Test Type Detection

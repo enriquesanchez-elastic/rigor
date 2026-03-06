@@ -46,13 +46,14 @@ Issues appear in the Security tab and as PR annotations.
 
 ### Official Action
 
+The action analyzes **changed test files** (git diff) and can post a PR comment and upload SARIF:
+
 ```yaml
-- uses: rigor-dev/rigor-action@v1
+- uses: rigor-dev/rigor-action@v1   # or your fork, e.g. enriquesanchez-elastic/rigor-action
   with:
-    path: src
-    threshold: 75
-    comment: true        # Comment on PR
-    upload-sarif: true   # Upload to Code Scanning
+    rigor-version: latest           # or a tag, e.g. v1.0.6
+    comment-threshold: "100"        # Post comment if average score below this (100 = always)
+    upload-sarif: "true"            # Upload SARIF for GitHub Code Scanning
 ```
 
 ## Pre-commit Hooks

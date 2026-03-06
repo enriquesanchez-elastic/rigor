@@ -111,12 +111,12 @@ A deep code review identified and fixed critical issues across the entire stack:
 
 ## Current State Assessment
 
-Rigor has completed Phase 0–2 plus a thorough post-release hardening cycle: transparent scoring (6 categories, per-test, calibrated), LSP/VS Code, GitHub Action, auto-fix, 38+ rules (including AI smells) with reduced false-positive rates, 9 MCP tools with AI feedback, and a programmatic API (CLI `--stdin`, Rust `analyze_source`, Node SDK). 355 tests pass (unit, integration, regression, CLI, edge-case, watcher, MCP). Remaining gaps:
+Rigor has completed Phase 0–2 plus a thorough post-release hardening cycle: transparent scoring (6 categories, per-test, calibrated), LSP/VS Code, GitHub Action, auto-fix, 34 rules (including AI smells) with reduced false-positive rates, 9 MCP tools with AI feedback, and a programmatic API (CLI `--stdin`, Rust `analyze_source`, Node SDK). 355 tests pass (unit, integration, regression, CLI, edge-case, watcher, MCP). Remaining gaps:
 
 | Area | Current State | World-Class Standard |
 |------|--------------|---------------------|
 | **Scoring** | ✅ Transparent, per-test, 6 categories, calibrated (no-source scaling, assertion floor, per-test cap) | Empirically validated on benchmark (Phase 4) |
-| **Rules** | 38+ rules, tree-sitter where migrated; heuristics hardened; no plugins | Plugin ecosystem, more rules auto-fixable, 10 stub rules need detection logic |
+| **Rules** | 34 rules, tree-sitter where migrated; heuristics hardened; no plugins | Plugin ecosystem, more rules auto-fixable, 10 stub rules need detection logic |
 | **Editor** | ✅ LSP + VS Code, shared test file detection | Real-time diagnostics in place |
 | **AI Integration** | ✅ MCP 9 tools, programmatic API, Node SDK (fully typed) | Rate limiting, streaming, Python SDK (optional) |
 | **Ecosystem** | Standalone + API + SDK | Presets, plugins, shared configs (Phase 3+) |
@@ -242,7 +242,7 @@ gantt
 **Deliverables:**
 - Refactored `scoring.rs` with clear separation between positive scoring and penalty deductions
 - Each issue maps to exactly one scoring impact (either category or penalty, not both)
-- Unit tests verifying no double-counting across all 28 rules
+- Unit tests verifying no double-counting across all rules
 
 ### 0.3 — Per-Test Scoring
 
@@ -366,7 +366,7 @@ gantt
 **Type:** Extend (tree-sitter already used for parsing) | **Prerequisites:** None  
 **Delivered:** Shared query cache (`parser/queries.rs`), 10+ rules using tree-sitter queries (e.g. console, debugger, focused-test).
 
-**MVP:** Migrate 10 highest-impact rules to tree-sitter queries; shared query cache. **Full:** As below. **Cut if slip:** All 28 rules migrated in one phase.
+**MVP:** Migrate 10 highest-impact rules to tree-sitter queries; shared query cache. **Full:** As below. **Cut if slip:** All rules migrated in one phase.
 
 **What:** Replace regex/string-matching rule implementations with tree-sitter query API patterns. Use AST-aware analysis throughout.
 
@@ -392,7 +392,7 @@ With tree-sitter queries:
 ```
 
 **Deliverables:**
-- Tree-sitter query patterns for all 28 rules
+- Tree-sitter query patterns for applicable rules
 - Shared query compilation cache (queries compiled once, reused per file)
 - Benchmark showing accuracy improvement: baseline FP/FN rates documented; target &lt;5% false positive rate (see [Per-phase success criteria](#per-phase-success-criteria))
 - Migration of at least the 10 highest-impact rules
@@ -404,7 +404,7 @@ With tree-sitter queries:
 
 **What:** Add rules that detect the most impactful test quality problems not currently covered.
 
-**Why:** The current 28 rules miss several categories of test problems that experienced engineers immediately recognize. Closing these gaps makes Rigor credible with senior engineers and tech leads — the people who make adoption decisions.
+**Why:** The current rule set can miss several categories of test problems that experienced engineers immediately recognize. Closing these gaps makes Rigor credible with senior engineers and tech leads — the people who make adoption decisions.
 
 **New rules and rationale:** 10 rules across maintainability, design, correctness, efficiency, TypeScript, and reliability. See [Appendix: Missing critical rules](#missing-critical-rules) for the full table.
 
@@ -470,7 +470,7 @@ With tree-sitter queries:
 
 **What:** Ship opinionated, named configurations that teams can extend.
 
-**Why:** Configuration is a barrier to adoption. New users shouldn't have to decide which of 38+ rules to enable at what severity. Presets encode expert opinions: "For a React app, these are the rules and thresholds that matter." This is the same pattern that made `eslint:recommended` and `airbnb` style guide successful.
+**Why:** Configuration is a barrier to adoption. New users shouldn't have to decide which of 34+ rules to enable at what severity. Presets encode expert opinions: "For a React app, these are the rules and thresholds that matter." This is the same pattern that made `eslint:recommended` and `airbnb` style guide successful.
 
 **Presets:**
 

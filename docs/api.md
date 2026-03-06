@@ -91,7 +91,23 @@ The JSON shape is considered **stable** for the same major version. New optional
 
 ## SDKs
 
-- **Node.js:** Use the CLI with `--json` or `--stdin --json` and parse stdout. A thin wrapper package `@rigor/sdk` (or local `sdk/node`) can spawn `rigor` and return the parsed result.
-- **Python:** Same idea: invoke `rigor --json` or `rigor --stdin --json` with stdin content and parse JSON from stdout.
+### Node.js (`@rigor/sdk`)
 
-See the repo for an example Node.js wrapper in `sdk/node` (if present).
+Requires the `rigor` binary on PATH (or set `RIGOR_BIN`).
+
+```javascript
+const { analyze, analyzeSource } = require('@rigor/sdk');
+
+// Analyze by file path
+const result = await analyze('src/auth.test.ts');
+
+// Analyze from string (stdin)
+const result = await analyzeSource(testSource, { filename: 'my.test.ts' });
+```
+
+- **`analyze(input, options?)`** — `input` is a file path string, or `{ stdin: string, filename?: string }` for in-memory source. Options: `config`, `threshold`.
+- **`analyzeSource(source, options?)`** — Convenience for stdin analysis; same result shape as `analyze({ stdin: source, filename })`.
+
+### Other languages
+
+- **Python:** Invoke `rigor --json` or `rigor --stdin --json` with stdin content and parse JSON from stdout.
