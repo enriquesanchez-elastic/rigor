@@ -85,7 +85,7 @@ pub fn apply_fixes(path: &Path, fixes: &[Fix]) -> std::io::Result<()> {
         return Ok(());
     }
     let mut sorted: Vec<&Fix> = fixes.iter().collect();
-    sorted.sort_by(|a, b| (b.start_line, b.start_column).cmp(&(a.start_line, a.start_column)));
+    sorted.sort_by_key(|b| std::cmp::Reverse((b.start_line, b.start_column)));
     let content = fs::read_to_string(path)?;
     let mut new_content = content.clone();
     let lines: Vec<&str> = content.lines().collect();

@@ -117,7 +117,7 @@ pub fn report_batch(result: &BatchMutationResult) {
         .iter()
         .filter(|r| r.survived > 0)
         .collect();
-    files_with_survivors.sort_by(|a, b| b.survived.cmp(&a.survived));
+    files_with_survivors.sort_by_key(|b| std::cmp::Reverse(b.survived));
 
     if !files_with_survivors.is_empty() {
         println!();

@@ -35,7 +35,7 @@ pub fn select_mutations(mutations: &[Mutation], count: usize) -> Vec<Mutation> {
         .enumerate()
         .map(|(i, m)| (i, priority(m)))
         .collect();
-    indexed.sort_by(|a, b| b.1.cmp(&a.1));
+    indexed.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     let take: Vec<usize> = indexed.into_iter().take(count).map(|(i, _)| i).collect();
     take.into_iter().map(|i| mutations[i].clone()).collect()

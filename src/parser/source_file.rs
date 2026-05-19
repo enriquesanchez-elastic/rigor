@@ -191,11 +191,7 @@ impl<'a> SourceFileParser<'a> {
 
         let total = exports.len();
         let covered = tested.len();
-        let percent = if total > 0 {
-            ((covered * 100) / total) as u8
-        } else {
-            100 // No exports = 100% covered
-        };
+        let percent = ((covered * 100) as u32).checked_div(total as u32).unwrap_or(100) as u8;
 
         FunctionCoverage {
             total_exports: total,
