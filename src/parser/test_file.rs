@@ -454,9 +454,10 @@ impl<'a> TestFileParser<'a> {
     fn extract_string_value(&self, node: Node) -> String {
         let text = self.node_text(node);
         // Remove quotes
-        if (text.starts_with('"') && text.ends_with('"'))
-            || (text.starts_with('\'') && text.ends_with('\''))
-            || (text.starts_with('`') && text.ends_with('`'))
+        if text.len() >= 2
+            && ((text.starts_with('"') && text.ends_with('"'))
+                || (text.starts_with('\'') && text.ends_with('\''))
+                || (text.starts_with('`') && text.ends_with('`')))
         {
             text[1..text.len() - 1].to_string()
         } else {

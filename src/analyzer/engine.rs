@@ -116,12 +116,6 @@ impl AnalysisEngine {
 
     /// Analyze a test file and return the result
     pub fn analyze(&self, test_path: &Path, config: Option<&Config>) -> Result<AnalysisResult> {
-        // Check if this is a test utility file (skip analysis or handle differently)
-        if SourceMapper::is_test_utility(test_path) {
-            // Still analyze but with reduced expectations
-            // We don't skip entirely because the file might have real tests
-        }
-
         // Read and parse the test file
         let source = fs::read_to_string(test_path)
             .with_context(|| format!("Failed to read test file: {}", test_path.display()))?;

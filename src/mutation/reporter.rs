@@ -128,7 +128,7 @@ pub fn report_batch(result: &BatchMutationResult) {
                 file_result
                     .source_path
                     .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
+                    .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "?".to_string()),
                 file_result.survived
             );

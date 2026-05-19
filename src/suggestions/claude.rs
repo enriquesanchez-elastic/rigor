@@ -8,7 +8,6 @@
 use crate::AnalysisResult;
 
 /// Claude API client for generating test improvements
-#[allow(dead_code)]
 pub struct ClaudeClient {
     api_key: String,
     model: String,
