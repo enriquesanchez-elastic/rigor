@@ -319,7 +319,7 @@ impl AnalysisEngine {
             } else {
                 SideEffectVerificationRule::new()
             };
-        let ai_smells_rule = AiSmellsRule::new();
+        let ai_smells_rule = AiSmellsRule::new().with_test_type(test_type);
         let test_complexity_rule = TestComplexityRule::new();
         let vacuous_test_rule = VacuousTestRule::new();
         let incomplete_mock_rule = IncompleteMockVerificationRule::new();

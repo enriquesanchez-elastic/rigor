@@ -10,11 +10,20 @@ use regex::Regex;
 use tree_sitter::Tree;
 
 /// Rule that detects AI-typical test smells
-pub struct AiSmellsRule;
+pub struct AiSmellsRule {
+    test_type: crate::TestType,
+}
 
 impl AiSmellsRule {
     pub fn new() -> Self {
-        Self
+        Self {
+            test_type: crate::TestType::Unit,
+        }
+    }
+
+    pub fn with_test_type(mut self, test_type: crate::TestType) -> Self {
+        self.test_type = test_type;
+        self
     }
 }
 
@@ -111,12 +120,15 @@ impl AnalysisRule for AiSmellsRule {
         }
 
         // Happy-path-only: no error/reject/throw in test names or assertions
+        // Only applies to unit tests — E2e, Integration, and Component tests have different
+        // structure and aren't expected to exercise error paths the same way.
+        let is_unit = matches!(self.test_type, crate::TestType::Unit);
         let has_error_tests = tests.iter().any(|t| {
             let n = t.name.to_lowercase();
             n.contains("throw") || n.contains("error") || n.contains("reject") || n.contains("fail")
         });
         let has_to_throw = source.contains("toThrow") || source.contains("rejects");
-        if tests.len() >= 4 && !has_error_tests && !has_to_throw {
+        if is_unit && tests.len() >= 4 && !has_error_tests && !has_to_throw {
             issues.push(Issue {
                 rule: Rule::HappyPathOnly,
                 severity: Severity::Info,
@@ -197,5 +209,66 @@ impl AnalysisRule for AiSmellsRule {
             })
             .count();
         (25i32 - (ai_count as i32 * 4).min(25)).max(0) as u8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Location, TestType};
+
+    fn make_test(name: &str) -> TestCase {
+        TestCase {
+            name: name.to_string(),
+            location: Location::new(1, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: None,
+        }
+    }
+
+    #[test]
+    fn happy_path_does_not_fire_for_e2e() {
+        let tests: Vec<TestCase> = (1..=5).map(|i| make_test(&format!("page loads {i}"))).collect();
+        let source = tests
+            .iter()
+            .map(|t| format!("it('{}', () => {{ expect(res.status).toBe(200); }});", t.name))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let rule = AiSmellsRule::new().with_test_type(TestType::E2e);
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(&source)
+            .unwrap();
+        let issues = rule.analyze(&tests, &source, &tree);
+
+        assert!(
+            !issues.iter().any(|i| i.rule == Rule::HappyPathOnly),
+            "HappyPathOnly must not fire for E2e tests"
+        );
+    }
+
+    #[test]
+    fn happy_path_fires_for_unit_tests() {
+        let tests: Vec<TestCase> = (1..=5).map(|i| make_test(&format!("adds numbers {i}"))).collect();
+        let source = tests
+            .iter()
+            .map(|t| format!("it('{}', () => {{ expect(add(1,2)).toBe(3); }});", t.name))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let rule = AiSmellsRule::new().with_test_type(TestType::Unit);
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse(&source)
+            .unwrap();
+        let issues = rule.analyze(&tests, &source, &tree);
+
+        assert!(
+            issues.iter().any(|i| i.rule == Rule::HappyPathOnly),
+            "HappyPathOnly must still fire for Unit tests with no error paths"
+        );
     }
 }

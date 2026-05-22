@@ -167,8 +167,8 @@ regression!(
 regression!(
     weak_cypress,
     "test-repos/fake-project/e2e/weak-cypress.cy.ts",
-    69,
-    9
+    70,
+    8
 );
 
 // vitest/
@@ -189,8 +189,8 @@ regression!(
 regression!(
     button_bad_test,
     "test-repos/fake-project/src/components/Button.bad.test.tsx",
-    68,
-    12
+    69,
+    11
 );
 /// Run with: cargo test --test regression print_baselines -- --ignored --nocapture
 /// Then paste output to update the regression!() macros above.
