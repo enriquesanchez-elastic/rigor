@@ -56,7 +56,6 @@ impl ErrorCoverageRule {
             let mentions_error = name_lower.contains("throw")
                 || name_lower.contains("error")
                 || name_lower.contains("fail")
-                || name_lower.contains("invalid")
                 || name_lower.contains("reject");
 
             if references_function && mentions_error {
@@ -131,25 +130,9 @@ impl AnalysisRule for ErrorCoverageRule {
                 let should_test_error = name_lower.contains("throw")
                     || name_lower.contains("error")
                     || name_lower.contains("fail")
-                    || name_lower.contains("invalid")
                     || name_lower.contains("reject");
 
                 if should_test_error {
-                    // "invalid X is falsy" tests boolean return, not exceptions — don't flag
-                    let only_invalid = name_lower.contains("invalid")
-                        && !name_lower.contains("throw")
-                        && !name_lower.contains("reject")
-                        && !name_lower.contains("error");
-                    let has_boolean_assertion = test.assertions.iter().any(|a| {
-                        let r = a.raw.to_lowercase();
-                        r.contains("tobefalsy")
-                            || r.contains("tobe(false)")
-                            || r.contains("tobe(true)")
-                    });
-                    if only_invalid && has_boolean_assertion {
-                        continue;
-                    }
-
                     let has_error_assertion = test.assertions.iter().any(|a| {
                         matches!(a.kind, AssertionKind::ToThrow)
                             || a.raw.contains("rejects")
@@ -321,6 +304,33 @@ mod tests {
 
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.message.contains("error handling")));
+    }
+
+    #[test]
+    fn test_name_with_only_invalid_does_not_trigger_error_assertion_check() {
+        // Test name contains "invalid" but tests a null return — must NOT fire MissingErrorTest.
+        // The old escape hatch only covered toBe(false/true)/toBeFalsy; toBeNull was still a false positive.
+        let tests = vec![make_test(
+            "returns null for invalid email",
+            vec![Assertion {
+                kind: AssertionKind::ToBe,
+                quality: AssertionKind::ToBe.quality(),
+                location: Location::new(1, 1),
+                raw: "expect(validate('bad')).toBeNull()".to_string(),
+            }],
+        )];
+
+        let rule = ErrorCoverageRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+
+        assert!(
+            !issues.iter().any(|i| i.rule == Rule::MissingErrorTest),
+            "test name with 'invalid' testing a null return must not trigger MissingErrorTest"
+        );
     }
 
     #[test]
