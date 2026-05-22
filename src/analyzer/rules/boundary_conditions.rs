@@ -280,39 +280,33 @@ impl AnalysisRule for BoundaryConditionsRule {
         if tests.is_empty() {
             return 0;
         }
-
+        let total_tests = tests.len().max(1);
         let mut score: i32 = 25;
 
-        // Count missing boundary tests
-        let missing_boundaries = issues
+        let missing = issues
             .iter()
             .filter(|i| i.rule == Rule::MissingBoundaryTest && i.severity == Severity::Warning)
             .count();
-
-        // Deduct for missing boundary tests (-3 each, max -15)
-        score -= (missing_boundaries as i32 * 3).min(15);
-
-        // Deduct for general lack of edge case testing (-5)
-        let has_edge_case_warning = issues.iter().any(|i| {
+        let edge_warn = issues.iter().any(|i| {
             i.rule == Rule::MissingBoundaryTest
                 && i.severity == Severity::Info
                 && i.message.contains("edge cases")
         });
 
-        if has_edge_case_warning {
+        score -= ((missing as f32 / total_tests as f32).min(1.0) * 15.0) as i32;
+        if edge_warn {
             score -= 5;
         }
 
-        // Bonus for tests that explicitly test boundaries
+        // Bonus: tests with boundary-keyword names
         let boundary_keywords = ["edge", "boundary", "limit", "max", "min", "zero", "empty"];
         let boundary_tests = tests
             .iter()
             .filter(|t| {
-                let name_lower = t.name.to_lowercase();
-                boundary_keywords.iter().any(|k| name_lower.contains(k))
+                let n = t.name.to_lowercase();
+                boundary_keywords.iter().any(|k| n.contains(k))
             })
             .count();
-
         if boundary_tests > 0 {
             score += (boundary_tests as i32 * 2).min(5);
         }

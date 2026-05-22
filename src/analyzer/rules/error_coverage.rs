@@ -182,45 +182,38 @@ impl AnalysisRule for ErrorCoverageRule {
         if tests.is_empty() {
             return 0;
         }
-
+        let total_tests = tests.len().max(1);
         let mut score: i32 = 25;
 
-        // Count missing error tests
-        let missing_error_tests = issues
+        let missing = issues
             .iter()
             .filter(|i| i.rule == Rule::MissingErrorTest && i.severity == Severity::Warning)
             .count();
-
-        // Deduct for missing error tests (-4 each, max -20)
-        score -= (missing_error_tests as i32 * 4).min(20);
-
-        // Deduct for error tests without proper assertions (-2 each, max -10)
-        let weak_error_tests = issues
+        let weak_error = issues
             .iter()
             .filter(|i| i.rule == Rule::MissingErrorTest && i.severity == Severity::Info)
             .count();
-        score -= (weak_error_tests as i32 * 2).min(10);
+        let return_path = issues
+            .iter()
+            .filter(|i| i.rule == Rule::ReturnPathCoverage)
+            .count();
 
-        // Bonus for tests that properly test errors
+        score -= ((missing as f32 / total_tests as f32).min(1.0) * 20.0) as i32;
+        score -= ((weak_error as f32 / total_tests as f32).min(1.0) * 10.0) as i32;
+        score -= ((return_path as f32 / total_tests as f32).min(1.0) * 9.0) as i32;
+
+        // Bonus: tests with proper toThrow assertions
         let proper_error_tests = tests
             .iter()
             .filter(|t| {
                 t.assertions
                     .iter()
-                    .any(|a| matches!(a.kind, AssertionKind::ToThrow))
+                    .any(|a| matches!(a.kind, crate::AssertionKind::ToThrow))
             })
             .count();
-
         if proper_error_tests > 0 {
             score += (proper_error_tests as i32).min(5);
         }
-
-        // ReturnPathCoverage is mapped to "Error Coverage" category (see lib.rs rule_scoring_category).
-        let return_path = issues
-            .iter()
-            .filter(|i| i.rule == Rule::ReturnPathCoverage)
-            .count();
-        score -= (return_path as i32 * 3).min(9);
 
         score.clamp(0, 25) as u8
     }

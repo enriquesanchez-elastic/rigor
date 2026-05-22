@@ -154,41 +154,23 @@ impl AnalysisRule for AssertionQualityRule {
             return 0;
         }
 
+        let total_assertions = tests.iter().map(|t| t.assertions.len()).sum::<usize>().max(1);
+        let total_tests = tests.len().max(1);
         let mut score: i32 = 25;
 
-        // Count assertion quality issues
-        let weak_assertions = issues
-            .iter()
-            .filter(|i| i.rule == Rule::WeakAssertion)
-            .count();
-        let no_assertions = issues
-            .iter()
-            .filter(|i| i.rule == Rule::NoAssertions)
-            .count();
+        let weak = issues.iter().filter(|i| i.rule == Rule::WeakAssertion).count();
+        let no_assert = issues.iter().filter(|i| i.rule == Rule::NoAssertions).count();
+        let snap = issues.iter().filter(|i| i.rule == Rule::SnapshotOveruse).count();
+        let trivial = issues.iter().filter(|i| i.rule == Rule::TrivialAssertion).count();
 
-        // Deduct points for weak assertions (-2 each, max -18 so many weak assertions hurt)
-        score -= (weak_assertions as i32 * 2).min(18);
+        // Ratio-based: proportion of assertions/tests affected
+        score -= ((weak as f32 / total_assertions as f32).min(1.0) * 18.0) as i32;
+        score -= ((no_assert as f32 / total_tests as f32).min(1.0) * 24.0) as i32;
+        score -= ((snap as f32 / total_tests as f32).min(1.0) * 12.0) as i32;
+        score -= ((trivial as f32 / total_assertions as f32).min(1.0) * 12.0) as i32;
 
-        // Deduct heavily for tests without assertions (-6 each, max -24)
-        score -= (no_assertions as i32 * 6).min(24);
-
-        // Snapshot overuse (-3 each, max -12)
-        let snapshot_overuse = issues
-            .iter()
-            .filter(|i| i.rule == Rule::SnapshotOveruse)
-            .count();
-        score -= (snapshot_overuse as i32 * 3).min(12);
-
-        // Trivial assertions (test only has expect(1).toBe(1) etc.) — deduct in category too
-        let trivial = issues
-            .iter()
-            .filter(|i| i.rule == Rule::TrivialAssertion)
-            .count();
-        score -= (trivial as i32 * 3).min(12);
-
-        // Phase 2 rules mapped to "Assertion Quality" category (see rule_scoring_category in lib.rs).
-        // Their issues arrive in the shared `issues` slice; count them here.
-        let phase2_count = issues
+        // Phase 2 rules mapped to "Assertion Quality" category (see rule_scoring_category in lib.rs)
+        let phase2 = issues
             .iter()
             .filter(|i| {
                 matches!(
@@ -202,19 +184,16 @@ impl AnalysisRule for AssertionQualityRule {
                 )
             })
             .count();
-        score -= (phase2_count as i32 * 2).min(12);
+        score -= ((phase2 as f32 / total_tests as f32).min(1.0) * 12.0) as i32;
 
-        // Calculate strong assertion ratio bonus
-        let total_assertions: usize = tests.iter().map(|t| t.assertions.len()).sum();
-        let strong_assertions = tests
+        // Bonus: high strong-assertion ratio
+        let strong = tests
             .iter()
             .flat_map(|t| &t.assertions)
-            .filter(|a| a.quality == AssertionQuality::Strong)
+            .filter(|a| a.quality == crate::AssertionQuality::Strong)
             .count();
-
         if total_assertions > 0 {
-            let strong_ratio = strong_assertions as f32 / total_assertions as f32;
-            // Bonus for high ratio of strong assertions (up to +5)
+            let strong_ratio = strong as f32 / total_assertions as f32;
             if strong_ratio > 0.8 {
                 score += 5;
             } else if strong_ratio > 0.6 {
@@ -313,6 +292,61 @@ mod tests {
 
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].rule, Rule::NoAssertions);
+    }
+
+    #[test]
+    fn one_weak_assertion_in_large_file_scores_higher_than_in_tiny_file() {
+        use crate::{Issue, Location, Rule, Severity};
+        let rule = AssertionQualityRule::new();
+
+        // Build 10 weak issues (enough to hit the absolute cap in the old logic)
+        let make_weak_issue = || Issue {
+            rule: Rule::WeakAssertion,
+            severity: Severity::Warning,
+            message: "weak".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+            fix: None,
+        };
+        let ten_weak_issues: Vec<Issue> = (0..10).map(|_| make_weak_issue()).collect();
+
+        // Small file: 10 tests all with weak assertions (100% bad, 0 strong)
+        let small_tests: Vec<TestCase> = (0..10)
+            .map(|i| {
+                make_test_with_assertions(
+                    &format!("s{i}"),
+                    vec![make_assertion(
+                        crate::AssertionKind::ToBeDefined,
+                        "expect(x).toBeDefined()",
+                    )],
+                )
+            })
+            .collect();
+
+        // Large file: 10 weak + 90 moderate (ToHaveLength) assertions.
+        // Moderate is NOT penalised as weak AND does NOT count as strong,
+        // so the strong-ratio bonus is 0 — removing the accidental compensation
+        // that would otherwise mask the absolute-count bug.
+        let weak_assert =
+            make_assertion(crate::AssertionKind::ToBeDefined, "expect(x).toBeDefined()");
+        let moderate_assert =
+            make_assertion(crate::AssertionKind::ToHaveLength, "expect(x).toHaveLength(3)");
+        let large_tests: Vec<TestCase> = (0..10)
+            .map(|i| make_test_with_assertions(&format!("w{i}"), vec![weak_assert.clone()]))
+            .chain(
+                (0..90)
+                    .map(|i| make_test_with_assertions(&format!("t{i}"), vec![moderate_assert.clone()])),
+            )
+            .collect();
+
+        let score_small = rule.calculate_score(&small_tests, &ten_weak_issues);
+        let score_large = rule.calculate_score(&large_tests, &ten_weak_issues);
+
+        assert!(
+            score_large > score_small,
+            "10 weak assertions in 100-test file ({score_large}) must score higher \
+             than 10 weak assertions in 10-test file ({score_small})"
+        );
     }
 
     #[test]

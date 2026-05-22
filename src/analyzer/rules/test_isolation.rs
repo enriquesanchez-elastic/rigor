@@ -246,24 +246,20 @@ impl AnalysisRule for TestIsolationRule {
         if tests.is_empty() {
             return 0;
         }
-
+        let total_tests = tests.len().max(1);
         let mut score: i32 = 25;
 
-        // Count shared state issues
-        let shared_state_issues = issues
+        let shared = issues
             .iter()
             .filter(|i| i.rule == Rule::SharedState)
             .count();
-
-        // Deduct for shared state issues (-4 each, max -20)
-        score -= (shared_state_issues as i32 * 4).min(20);
-
-        // Deduct heavily for duplicate tests (-6 each, max -24)
-        let duplicates = issues
+        let dups = issues
             .iter()
             .filter(|i| i.rule == Rule::DuplicateTest)
             .count();
-        score -= (duplicates as i32 * 6).min(24);
+
+        score -= ((shared as f32 / total_tests as f32).min(1.0) * 20.0) as i32;
+        score -= ((dups as f32 / total_tests as f32).min(1.0) * 24.0) as i32;
 
         score.clamp(0, 25) as u8
     }
