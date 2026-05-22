@@ -28,32 +28,53 @@ impl BoundaryConditionsRule {
         self
     }
 
-    /// Check if tests cover a specific boundary value
-    fn tests_cover_boundary(tests: &[TestCase], value: &str, operator: &str) -> bool {
-        // Parse the numeric value
+    /// Returns true if `num` appears as a standalone integer in `text`
+    /// (not adjacent to another digit on either side).
+    fn is_standalone_number(text: &str, num: i64) -> bool {
+        let s = num.to_string();
+        let tbytes = text.as_bytes();
+        let nbytes = s.as_bytes();
+        if nbytes.len() > tbytes.len() {
+            return false;
+        }
+        let mut i = 0;
+        while i + nbytes.len() <= tbytes.len() {
+            if tbytes[i..i + nbytes.len()] == *nbytes {
+                let before_ok = i == 0 || !tbytes[i - 1].is_ascii_digit();
+                let after_ok =
+                    i + nbytes.len() == tbytes.len() || !tbytes[i + nbytes.len()].is_ascii_digit();
+                if before_ok && after_ok {
+                    return true;
+                }
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Check if tests cover a specific boundary value using standalone-number matching.
+    fn tests_cover_boundary(tests: &[TestCase], value: &str, _operator: &str) -> bool {
         let num: f64 = match value.parse() {
             Ok(n) => n,
             Err(_) => return false,
         };
-
-        // Determine boundary values to test based on operator
-        let boundary_values: Vec<f64> = match operator {
-            ">=" | "<=" => vec![num, num - 1.0, num + 1.0],
-            ">" | "<" => vec![num, num - 1.0, num + 1.0],
-            "==" | "===" => vec![num, num - 1.0, num + 1.0],
-            _ => vec![num],
-        };
-
-        // Check if any test mentions these values
+        let targets: [i64; 3] = [
+            num as i64,
+            (num - 1.0) as i64,
+            (num + 1.0) as i64,
+        ];
         for test in tests {
-            let test_text = format!("{} {:?}", test.name, test.assertions);
-            for boundary in &boundary_values {
-                if test_text.contains(&boundary.to_string()) {
+            for &t in &targets {
+                if Self::is_standalone_number(&test.name, t) {
                     return true;
+                }
+                for assertion in &test.assertions {
+                    if Self::is_standalone_number(&assertion.raw, t) {
+                        return true;
+                    }
                 }
             }
         }
-
         false
     }
 
@@ -522,6 +543,31 @@ mod tests {
             }),
             "should warn about missing edge cases even when tests.len() >= 5. Issues: {:#?}",
             issues
+        );
+    }
+
+    #[test]
+    fn boundary_check_does_not_match_18_inside_180() {
+        // 180 must NOT satisfy a >= 18 boundary check
+        let tests = vec![make_test(
+            "handles large age",
+            vec![make_assertion("expect(isAdult(180)).toBe(true)")],
+        )];
+        assert!(
+            !BoundaryConditionsRule::tests_cover_boundary(&tests, "18", ">="),
+            "value 180 must not satisfy boundary check for 18"
+        );
+    }
+
+    #[test]
+    fn boundary_check_matches_exact_standalone_number() {
+        let tests = vec![make_test(
+            "handles age 18",
+            vec![make_assertion("expect(isAdult(18)).toBe(true)")],
+        )];
+        assert!(
+            BoundaryConditionsRule::tests_cover_boundary(&tests, "18", ">="),
+            "value 18 must satisfy boundary check for 18"
         );
     }
 }
