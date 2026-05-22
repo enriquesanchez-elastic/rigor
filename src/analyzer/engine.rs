@@ -544,11 +544,23 @@ impl AnalysisEngine {
             return AggregateStats::default();
         }
 
-        let total_score: u32 = results.iter().map(|r| r.score.value as u32).sum();
-        let avg_score = (total_score / results.len() as u32) as u8;
-
         let total_tests: usize = results.iter().map(|r| r.stats.total_tests).sum();
         let total_issues: usize = results.iter().map(|r| r.issues.len()).sum();
+
+        // Weight each file's score by its test count so larger suites drive the
+        // aggregate score. Falls back to equal weight (weight = 1) for empty
+        // files so they still contribute rather than being silently dropped.
+        let avg_score = {
+            let weighted_sum: u32 = results
+                .iter()
+                .map(|r| r.score.value as u32 * r.stats.total_tests.max(1) as u32)
+                .sum();
+            let total_weight: u32 = results
+                .iter()
+                .map(|r| r.stats.total_tests.max(1) as u32)
+                .sum();
+            (weighted_sum / total_weight) as u8
+        };
 
         AggregateStats {
             files_analyzed: results.len(),
@@ -800,7 +812,11 @@ mod tests {
             r1.stats.total_tests + r2.stats.total_tests
         );
         assert_eq!(stats.total_issues, r1.issues.len() + r2.issues.len());
-        let expected_avg = ((r1.score.value as u32 + r2.score.value as u32) / 2) as u8;
+        // Weighted average: each file's score weighted by its test count.
+        let w1 = r1.stats.total_tests.max(1) as u32;
+        let w2 = r2.stats.total_tests.max(1) as u32;
+        let expected_avg =
+            ((r1.score.value as u32 * w1 + r2.score.value as u32 * w2) / (w1 + w2)) as u8;
         assert_eq!(stats.average_score.value, expected_avg);
     }
 
@@ -973,6 +989,51 @@ mod tests {
         assert!(
             !result.issues.is_empty(),
             "default engine should still detect trivial assertion issues"
+        );
+    }
+
+    #[test]
+    fn aggregate_stats_weighted_by_test_count() {
+        // File A: 1 test, terrible score
+        let bad_file = make_test_file(
+            r#"
+            describe('bad', () => {
+                it('x', () => { expect(1).toBe(1); });
+            });
+            "#,
+        );
+
+        // File B: 50 tests with good-ish names and meaningful assertions
+        let many_tests: String = (1..=50)
+            .map(|i| {
+                format!(
+                    "it('validates item {} correctly', () => {{ expect(process({})).toBe({}); }});",
+                    i,
+                    i,
+                    i + 1
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let good_file =
+            make_test_file(&format!("describe('suite', () => {{ {} }});", many_tests));
+
+        let engine = AnalysisEngine::new().without_source_analysis();
+        let r_bad = engine.analyze(bad_file.path(), None).unwrap();
+        let r_good = engine.analyze(good_file.path(), None).unwrap();
+
+        // The bad file has 1 test; the good file has 50.
+        // Weighted average must be much closer to r_good.score than to r_bad.score.
+        let stats = AnalysisEngine::aggregate_stats(&[r_bad.clone(), r_good.clone()]);
+
+        // Unweighted would be (bad + good) / 2 — heavily dragged down by bad.
+        // Weighted should be close to good (50x more tests).
+        let unweighted = ((r_bad.score.value as u32 + r_good.score.value as u32) / 2) as u8;
+        assert!(
+            stats.average_score.value > unweighted,
+            "weighted avg ({}) must be higher than unweighted avg ({}) when bad file has far fewer tests",
+            stats.average_score.value,
+            unweighted
         );
     }
 
