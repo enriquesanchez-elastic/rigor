@@ -22,10 +22,10 @@ impl TestIsolationRule {
     fn visit_for_shared_state(node: Node, source: &str, issues: &mut Vec<SharedStateIssue>) {
         let node_text = node.utf8_text(source.as_bytes()).unwrap_or("");
 
-        // Check for module-level let/var declarations (potential shared state)
+        // Check for module-level or describe-scope let/var declarations (potential shared state)
         if node.kind() == "lexical_declaration" || node.kind() == "variable_declaration" {
-            // Check if this is at module level (not inside a function)
-            if Self::is_at_module_level(node) {
+            // Check if this is in shared scope (module level or describe() callback)
+            if Self::is_in_shared_scope(node, source) {
                 // Check if it's let (mutable)
                 if node_text.starts_with("let ") {
                     let location = Location::new(
@@ -65,19 +65,54 @@ impl TestIsolationRule {
         }
     }
 
-    fn is_at_module_level(node: Node) -> bool {
+    /// Returns true if the node is in module scope OR in a describe() callback
+    /// (both are "shared" across tests). Returns false for it/test/beforeEach/afterEach scopes.
+    fn is_in_shared_scope(node: Node, source: &str) -> bool {
         let mut current = node.parent();
         while let Some(parent) = current {
             match parent.kind() {
                 "program" => return true,
-                "function_declaration"
+                "arrow_function"
                 | "function_expression"
-                | "arrow_function"
-                | "method_definition" => return false,
-                _ => current = parent.parent(),
+                | "function_declaration"
+                | "method_definition" => {
+                    // AST: arrow_function → arguments → call_expression
+                    // parent.parent() is `arguments`, parent.parent().parent() is `call_expression`
+                    let call_node = parent
+                        .parent()
+                        .and_then(|args| {
+                            if args.kind() == "arguments" {
+                                args.parent()
+                            } else if args.kind() == "call_expression" {
+                                Some(args)
+                            } else {
+                                None
+                            }
+                        });
+                    if let Some(call) = call_node {
+                        if call.kind() == "call_expression" {
+                            if let Some(callee) = call.child_by_field_name("function") {
+                                let name = callee.utf8_text(source.as_bytes()).unwrap_or("");
+                                let is_describe = matches!(
+                                    name,
+                                    "describe" | "fdescribe" | "xdescribe"
+                                ) || name.starts_with("describe.");
+                                if is_describe {
+                                    // Traverse past the describe call — still shared scope
+                                    current = call.parent();
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    // Any other function (it, test, beforeEach, production code) = local
+                    return false;
+                }
+                _ => {}
             }
+            current = parent.parent();
         }
-        true
+        false
     }
 
     fn check_test_dependencies(tests: &[TestCase]) -> Vec<(usize, usize)> {
@@ -310,6 +345,87 @@ mod tests {
         assert!(
             issues.iter().any(|i| i.rule == Rule::SharedState),
             "analyze() should report SharedState for module-level let without beforeEach"
+        );
+    }
+
+    #[test]
+    fn detects_let_inside_describe_scope() {
+        let source = r#"
+        describe('suite', () => {
+            let shared = {};
+            it('test 1', () => { expect(shared).toEqual({}); });
+        });
+    "#;
+        let mut parser = crate::parser::TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let tests = vec![crate::TestCase {
+            name: "test 1".to_string(),
+            location: crate::Location::new(4, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: Some("suite".to_string()),
+        }];
+        let rule = TestIsolationRule::new();
+        let issues = rule.analyze(&tests, source, &tree);
+        assert!(
+            issues.iter().any(|i| i.rule == crate::Rule::SharedState),
+            "must detect mutable let inside describe() callback without beforeEach"
+        );
+    }
+
+    #[test]
+    fn no_false_positive_for_it_scope_variable() {
+        let source = r#"
+        describe('suite', () => {
+            it('test', () => {
+                let local = {};
+                expect(local).toEqual({});
+            });
+        });
+    "#;
+        let mut parser = crate::parser::TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let tests = vec![crate::TestCase {
+            name: "test".to_string(),
+            location: crate::Location::new(3, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: Some("suite".to_string()),
+        }];
+        let rule = TestIsolationRule::new();
+        let issues = rule.analyze(&tests, source, &tree);
+        assert!(
+            !issues.iter().any(|i| i.rule == crate::Rule::SharedState),
+            "must NOT flag let declared inside it() callback — it is local"
+        );
+    }
+
+    #[test]
+    fn no_false_positive_describe_with_before_each() {
+        let source = r#"
+        describe('suite', () => {
+            let shared = {};
+            beforeEach(() => { shared = {}; });
+            it('test', () => { expect(shared).toEqual({}); });
+        });
+    "#;
+        let mut parser = crate::parser::TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let tests = vec![crate::TestCase {
+            name: "test".to_string(),
+            location: crate::Location::new(5, 1),
+            is_async: false,
+            is_skipped: false,
+            assertions: vec![],
+            describe_block: Some("suite".to_string()),
+        }];
+        let rule = TestIsolationRule::new();
+        let issues = rule.analyze(&tests, source, &tree);
+        assert!(
+            !issues.iter().any(|i| i.rule == crate::Rule::SharedState),
+            "must NOT flag let inside describe when beforeEach is present"
         );
     }
 }
