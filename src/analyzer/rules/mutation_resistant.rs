@@ -189,6 +189,9 @@ mod tests {
         let issues = rule.analyze(&tests, "", &tree);
         assert!(!issues.is_empty(), "should detect mutation-resistant issue");
         let score = rule.calculate_score(&tests, &issues);
-        assert!(score < 25, "score must be < 25 when mutation issues exist, got {score}");
+        assert!(
+            score < 25,
+            "score must be < 25 when mutation issues exist, got {score}"
+        );
     }
 }

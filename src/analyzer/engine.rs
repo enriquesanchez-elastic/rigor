@@ -1015,8 +1015,7 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        let good_file =
-            make_test_file(&format!("describe('suite', () => {{ {} }});", many_tests));
+        let good_file = make_test_file(&format!("describe('suite', () => {{ {} }});", many_tests));
 
         let engine = AnalysisEngine::new().without_source_analysis();
         let r_bad = engine.analyze(bad_file.path(), None).unwrap();

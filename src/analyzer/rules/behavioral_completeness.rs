@@ -80,10 +80,7 @@ impl BehavioralCompletenessRule {
                             .find(|c: char| !c.is_alphanumeric() && c != '_')
                             .unwrap_or(rest.len());
                         let prop = &rest[..end];
-                        if !prop.is_empty()
-                            && prop != "then"
-                            && prop != "catch"
-                            && prop.len() < 40
+                        if !prop.is_empty() && prop != "then" && prop != "catch" && prop.len() < 40
                         {
                             asserted.insert(prop.to_string());
                         }
@@ -307,7 +304,10 @@ mod tests {
             ),
             make_test(
                 "getOrder works",
-                vec![make_assertion(AssertionKind::ToBe, "expect(total).toBe(50)")],
+                vec![make_assertion(
+                    AssertionKind::ToBe,
+                    "expect(total).toBe(50)",
+                )],
             ),
         ];
 

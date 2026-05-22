@@ -78,25 +78,22 @@ impl TestIsolationRule {
                 | "method_definition" => {
                     // AST: arrow_function → arguments → call_expression
                     // parent.parent() is `arguments`, parent.parent().parent() is `call_expression`
-                    let call_node = parent
-                        .parent()
-                        .and_then(|args| {
-                            if args.kind() == "arguments" {
-                                args.parent()
-                            } else if args.kind() == "call_expression" {
-                                Some(args)
-                            } else {
-                                None
-                            }
-                        });
+                    let call_node = parent.parent().and_then(|args| {
+                        if args.kind() == "arguments" {
+                            args.parent()
+                        } else if args.kind() == "call_expression" {
+                            Some(args)
+                        } else {
+                            None
+                        }
+                    });
                     if let Some(call) = call_node {
                         if call.kind() == "call_expression" {
                             if let Some(callee) = call.child_by_field_name("function") {
                                 let name = callee.utf8_text(source.as_bytes()).unwrap_or("");
-                                let is_describe = matches!(
-                                    name,
-                                    "describe" | "fdescribe" | "xdescribe"
-                                ) || name.starts_with("describe.");
+                                let is_describe =
+                                    matches!(name, "describe" | "fdescribe" | "xdescribe")
+                                        || name.starts_with("describe.");
                                 if is_describe {
                                     // Traverse past the describe call — still shared scope
                                     current = call.parent();

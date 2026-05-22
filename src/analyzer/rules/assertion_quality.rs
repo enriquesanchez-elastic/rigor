@@ -154,14 +154,30 @@ impl AnalysisRule for AssertionQualityRule {
             return 0;
         }
 
-        let total_assertions = tests.iter().map(|t| t.assertions.len()).sum::<usize>().max(1);
+        let total_assertions = tests
+            .iter()
+            .map(|t| t.assertions.len())
+            .sum::<usize>()
+            .max(1);
         let total_tests = tests.len().max(1);
         let mut score: i32 = 25;
 
-        let weak = issues.iter().filter(|i| i.rule == Rule::WeakAssertion).count();
-        let no_assert = issues.iter().filter(|i| i.rule == Rule::NoAssertions).count();
-        let snap = issues.iter().filter(|i| i.rule == Rule::SnapshotOveruse).count();
-        let trivial = issues.iter().filter(|i| i.rule == Rule::TrivialAssertion).count();
+        let weak = issues
+            .iter()
+            .filter(|i| i.rule == Rule::WeakAssertion)
+            .count();
+        let no_assert = issues
+            .iter()
+            .filter(|i| i.rule == Rule::NoAssertions)
+            .count();
+        let snap = issues
+            .iter()
+            .filter(|i| i.rule == Rule::SnapshotOveruse)
+            .count();
+        let trivial = issues
+            .iter()
+            .filter(|i| i.rule == Rule::TrivialAssertion)
+            .count();
 
         // Ratio-based: proportion of assertions/tests affected
         score -= ((weak as f32 / total_assertions as f32).min(1.0) * 18.0) as i32;
@@ -329,14 +345,15 @@ mod tests {
         // that would otherwise mask the absolute-count bug.
         let weak_assert =
             make_assertion(crate::AssertionKind::ToBeDefined, "expect(x).toBeDefined()");
-        let moderate_assert =
-            make_assertion(crate::AssertionKind::ToHaveLength, "expect(x).toHaveLength(3)");
+        let moderate_assert = make_assertion(
+            crate::AssertionKind::ToHaveLength,
+            "expect(x).toHaveLength(3)",
+        );
         let large_tests: Vec<TestCase> = (0..10)
             .map(|i| make_test_with_assertions(&format!("w{i}"), vec![weak_assert.clone()]))
-            .chain(
-                (0..90)
-                    .map(|i| make_test_with_assertions(&format!("t{i}"), vec![moderate_assert.clone()])),
-            )
+            .chain((0..90).map(|i| {
+                make_test_with_assertions(&format!("t{i}"), vec![moderate_assert.clone()])
+            }))
             .collect();
 
         let score_small = rule.calculate_score(&small_tests, &ten_weak_issues);

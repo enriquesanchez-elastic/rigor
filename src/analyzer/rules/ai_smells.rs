@@ -230,10 +230,17 @@ mod tests {
 
     #[test]
     fn happy_path_does_not_fire_for_e2e() {
-        let tests: Vec<TestCase> = (1..=5).map(|i| make_test(&format!("page loads {i}"))).collect();
+        let tests: Vec<TestCase> = (1..=5)
+            .map(|i| make_test(&format!("page loads {i}")))
+            .collect();
         let source = tests
             .iter()
-            .map(|t| format!("it('{}', () => {{ expect(res.status).toBe(200); }});", t.name))
+            .map(|t| {
+                format!(
+                    "it('{}', () => {{ expect(res.status).toBe(200); }});",
+                    t.name
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -252,7 +259,9 @@ mod tests {
 
     #[test]
     fn happy_path_fires_for_unit_tests() {
-        let tests: Vec<TestCase> = (1..=5).map(|i| make_test(&format!("adds numbers {i}"))).collect();
+        let tests: Vec<TestCase> = (1..=5)
+            .map(|i| make_test(&format!("adds numbers {i}")))
+            .collect();
         let source = tests
             .iter()
             .map(|t| format!("it('{}', () => {{ expect(add(1,2)).toBe(3); }});", t.name))

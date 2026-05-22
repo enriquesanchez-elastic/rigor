@@ -58,11 +58,7 @@ impl BoundaryConditionsRule {
             Ok(n) => n,
             Err(_) => return false,
         };
-        let targets: [i64; 3] = [
-            num as i64,
-            (num - 1.0) as i64,
-            (num + 1.0) as i64,
-        ];
+        let targets: [i64; 3] = [num as i64, (num - 1.0) as i64, (num + 1.0) as i64];
         for test in tests {
             for &t in &targets {
                 if Self::is_standalone_number(&test.name, t) {
