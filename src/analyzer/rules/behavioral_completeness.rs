@@ -43,67 +43,54 @@ impl BehavioralCompletenessRule {
         keys
     }
 
-    /// Find which return object keys are asserted: from test source (result.status) and from assertion.raw (e.g. .status, status:)
-    fn asserted_keys_in_tests(
-        test_source: &str,
+    /// Collect asserted property names only from tests that reference `fn_name`.
+    /// Looks at assertion raw text for `.property` patterns.
+    /// Does NOT scan full test source — that incorrectly attributes cross-function accesses.
+    pub(crate) fn asserted_keys_in_tests(
+        _test_source: &str,
         tests: &[TestCase],
         fn_name: &str,
     ) -> HashSet<String> {
         let mut asserted = HashSet::new();
-        let source_lower = test_source.to_lowercase();
         let fn_lower = fn_name.to_lowercase();
 
-        if !source_lower.contains(&fn_lower) {
+        // Only consider tests that actually reference this function
+        let relevant: Vec<_> = tests
+            .iter()
+            .filter(|t| {
+                t.name.to_lowercase().contains(&fn_lower)
+                    || t.assertions
+                        .iter()
+                        .any(|a| a.raw.to_lowercase().contains(&fn_lower))
+            })
+            .collect();
+
+        if relevant.is_empty() {
             return asserted;
         }
 
-        // From assertion raw text: .property (e.g. expect(result.status).toBe(...))
-        for test in tests {
+        for test in relevant {
             for a in &test.assertions {
                 let raw = a.raw.to_lowercase();
                 let mut i = 0;
                 while i < raw.len() {
-                    if raw[i..].starts_with('.') {
+                    if raw.as_bytes().get(i) == Some(&b'.') {
                         let rest = &raw[i + 1..];
                         let end = rest
                             .find(|c: char| !c.is_alphanumeric() && c != '_')
                             .unwrap_or(rest.len());
-                        let prop = rest[..end].to_string();
-                        if !prop.is_empty() && prop != "then" && prop != "catch" && prop.len() < 40
+                        let prop = &rest[..end];
+                        if !prop.is_empty()
+                            && prop != "then"
+                            && prop != "catch"
+                            && prop.len() < 40
                         {
-                            asserted.insert(prop);
+                            asserted.insert(prop.to_string());
                         }
                         i += 1 + end;
                     } else {
                         i += 1;
                     }
-                }
-            }
-        }
-
-        // From source: result.property, response.property, etc.
-        let result_vars = [
-            "result", "response", "res", "data", "output", "value", "ret",
-        ];
-        for var in result_vars {
-            let needle = format!("{}.", var);
-            if !source_lower.contains(&needle) {
-                continue;
-            }
-            let mut search_start = 0;
-            while let Some(pos) = source_lower[search_start..].find(&needle) {
-                let start = search_start + pos + needle.len();
-                let rest = &source_lower[start..];
-                let end = rest
-                    .find(|c: char| !c.is_alphanumeric() && c != '_')
-                    .unwrap_or(rest.len());
-                let prop = rest[..end].to_string();
-                if !prop.is_empty() && prop != "then" && prop != "catch" {
-                    asserted.insert(prop);
-                }
-                search_start = start + end;
-                if search_start >= source_lower.len() {
-                    break;
                 }
             }
         }
@@ -303,6 +290,40 @@ mod tests {
                 "when issues found, expected BehavioralCompleteness"
             );
         }
+    }
+
+    #[test]
+    fn asserted_keys_not_attributed_to_unrelated_function() {
+        // testA calls getUser() and accesses result.status
+        // getOrder() returns {status, amount} — neither test references getOrder
+        // result.status from testA must NOT count as asserting getOrder's status property
+        let tests = vec![
+            make_test(
+                "getUser returns status",
+                vec![make_assertion(
+                    AssertionKind::ToBe,
+                    "expect(result.status).toBe(200)",
+                )],
+            ),
+            make_test(
+                "getOrder works",
+                vec![make_assertion(AssertionKind::ToBe, "expect(total).toBe(50)")],
+            ),
+        ];
+
+        // The test_source is the full test file — it contains getOrder (so the fn_name check passes)
+        // but the `result.status` access belongs to the getUser test, not getOrder
+        let asserted = BehavioralCompletenessRule::asserted_keys_in_tests(
+            "const result = getUser();\nconst order = getOrder();",
+            &tests,
+            "getOrder",
+        );
+
+        assert!(
+            !asserted.contains("status"),
+            "status from getUser test must not be attributed to getOrder; got: {:?}",
+            asserted
+        );
     }
 
     #[test]
