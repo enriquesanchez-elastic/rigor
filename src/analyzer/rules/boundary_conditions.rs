@@ -238,7 +238,7 @@ impl AnalysisRule for BoundaryConditionsRule {
         }
 
         // If no edge value tests and we have tests, add an info issue
-        if !has_edge_value_tests && !tests.is_empty() && tests.len() < 5 {
+        if !has_edge_value_tests && !tests.is_empty() {
             issues.push(Issue {
                 rule: Rule::MissingBoundaryTest,
                 severity: Severity::Info,
@@ -490,6 +490,38 @@ mod tests {
             !boundary_warnings.is_empty(),
             "should detect missing boundary tests from test content alone, got issues: {:?}",
             issues.iter().map(|i| &i.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn edge_case_warning_fires_for_large_file() {
+        // 6 tests, none use 0/-1/null/empty — must still warn
+        // Using values that don't contain characters from edge values {0, -1, 1, null, undefined, '', [], {}}
+        // 2, 3, 4, 5, 6, 7 all avoid those substrings
+        let tests: Vec<TestCase> = (2..=7)
+            .map(|i| {
+                make_test(
+                    &format!("test {i}"),
+                    vec![make_assertion(&format!("expect(fn({})).toBe(true)", i))],
+                )
+            })
+            .collect();
+
+        let rule = BoundaryConditionsRule::new();
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let issues = rule.analyze(&tests, "test", &tree);
+
+        assert!(
+            issues.iter().any(|i| {
+                i.rule == Rule::MissingBoundaryTest
+                    && i.severity == Severity::Info
+                    && i.message.contains("edge cases")
+            }),
+            "should warn about missing edge cases even when tests.len() >= 5. Issues: {:#?}",
+            issues
         );
     }
 }

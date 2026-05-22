@@ -189,8 +189,8 @@ regression!(
 regression!(
     button_bad_test,
     "test-repos/fake-project/src/components/Button.bad.test.tsx",
-    71,
-    11
+    69,
+    12
 );
 /// Run with: cargo test --test regression print_baselines -- --ignored --nocapture
 /// Then paste output to update the regression!() macros above.
