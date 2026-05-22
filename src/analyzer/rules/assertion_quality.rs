@@ -186,6 +186,24 @@ impl AnalysisRule for AssertionQualityRule {
             .count();
         score -= (trivial as i32 * 3).min(12);
 
+        // Phase 2 rules mapped to "Assertion Quality" category (see rule_scoring_category in lib.rs).
+        // Their issues arrive in the shared `issues` slice; count them here.
+        let phase2_count = issues
+            .iter()
+            .filter(|i| {
+                matches!(
+                    i.rule,
+                    Rule::AssertionIntentMismatch
+                        | Rule::MutationResistant
+                        | Rule::BoundarySpecificity
+                        | Rule::StateVerification
+                        | Rule::BehavioralCompleteness
+                        | Rule::SideEffectNotVerified
+                )
+            })
+            .count();
+        score -= (phase2_count as i32 * 2).min(12);
+
         // Calculate strong assertion ratio bonus
         let total_assertions: usize = tests.iter().map(|t| t.assertions.len()).sum();
         let strong_assertions = tests
@@ -295,5 +313,48 @@ mod tests {
 
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].rule, Rule::NoAssertions);
+    }
+
+    #[test]
+    fn phase2_assertion_quality_issues_reduce_score() {
+        use crate::{Issue, Location, Rule, Severity};
+        let rule = AssertionQualityRule::new();
+        // Use a weak assertion so no strong-ratio bonus offsets the deduction.
+        let tests = vec![make_test_with_assertions(
+            "some test",
+            vec![make_assertion(
+                crate::AssertionKind::ToBeDefined,
+                "expect(x).toBeDefined()",
+            )],
+        )];
+
+        let no_issues: Vec<Issue> = vec![];
+        let with_issues: Vec<Issue> = vec![
+            Issue {
+                rule: Rule::MutationResistant,
+                severity: Severity::Info,
+                message: "mutation".to_string(),
+                location: Location::new(1, 1),
+                suggestion: None,
+                fix: None,
+            },
+            Issue {
+                rule: Rule::BehavioralCompleteness,
+                severity: Severity::Warning,
+                message: "completeness".to_string(),
+                location: Location::new(2, 1),
+                suggestion: None,
+                fix: None,
+            },
+        ];
+
+        let score_clean = rule.calculate_score(&tests, &no_issues);
+        let score_with = rule.calculate_score(&tests, &with_issues);
+
+        assert!(
+            score_with < score_clean,
+            "Phase 2 assertion-quality issues must reduce assertion quality score \
+             (clean={score_clean}, with_issues={score_with})"
+        );
     }
 }

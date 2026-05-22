@@ -49,7 +49,7 @@ macro_rules! regression {
 regression!(
     assertion_intent_mismatch,
     "test-repos/fake-project/tests/assertion-intent-mismatch.test.ts",
-    61,
+    53,
     17
 );
 regression!(
@@ -58,7 +58,7 @@ regression!(
     71,
     8
 );
-regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 95, 7);
+regression!(auth, "test-repos/fake-project/tests/auth.test.ts", 94, 7);
 regression!(
     debug_code,
     "test-repos/fake-project/tests/debug-code.test.ts",
@@ -71,7 +71,7 @@ regression!(
     75,
     4
 );
-regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 59, 21);
+regression!(flaky, "test-repos/fake-project/tests/flaky.test.ts", 51, 21);
 regression!(
     hardcoded_limited_input,
     "test-repos/fake-project/tests/hardcoded-limited-input.test.ts",
@@ -99,7 +99,7 @@ regression!(
 regression!(
     mutation_resistant,
     "test-repos/fake-project/tests/mutation-resistant.test.ts",
-    78,
+    75,
     7
 );
 regression!(
@@ -141,7 +141,7 @@ regression!(
 regression!(
     weak_assertions,
     "test-repos/fake-project/tests/weak-assertions.test.ts",
-    66,
+    62,
     15
 );
 
@@ -155,13 +155,13 @@ regression!(
 regression!(
     flaky_playwright,
     "test-repos/fake-project/e2e/flaky-playwright.e2e.test.ts",
-    79,
+    75,
     10
 );
 regression!(
     login_e2e,
     "test-repos/fake-project/e2e/login.e2e.test.ts",
-    79,
+    75,
     7
 );
 regression!(

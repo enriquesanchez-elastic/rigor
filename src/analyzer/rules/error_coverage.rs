@@ -215,6 +215,13 @@ impl AnalysisRule for ErrorCoverageRule {
             score += (proper_error_tests as i32).min(5);
         }
 
+        // ReturnPathCoverage is mapped to "Error Coverage" category (see lib.rs rule_scoring_category).
+        let return_path = issues
+            .iter()
+            .filter(|i| i.rule == Rule::ReturnPathCoverage)
+            .count();
+        score -= (return_path as i32 * 3).min(9);
+
         score.clamp(0, 25) as u8
     }
 }
@@ -321,5 +328,31 @@ mod tests {
 
         assert!(!issues.is_empty());
         assert!(issues.iter().any(|i| i.message.contains("error handling")));
+    }
+
+    #[test]
+    fn return_path_issues_reduce_error_coverage_score() {
+        use crate::{Issue, Location, Rule, Severity};
+        let rule = ErrorCoverageRule::new();
+        let tests = vec![make_test("some test", vec![make_throw_assertion()])];
+
+        let no_issues: Vec<Issue> = vec![];
+        let with_issues: Vec<Issue> = vec![Issue {
+            rule: Rule::ReturnPathCoverage,
+            severity: Severity::Warning,
+            message: "return path not tested".to_string(),
+            location: Location::new(1, 1),
+            suggestion: None,
+            fix: None,
+        }];
+
+        let score_clean = rule.calculate_score(&tests, &no_issues);
+        let score_with = rule.calculate_score(&tests, &with_issues);
+
+        assert!(
+            score_with < score_clean,
+            "ReturnPathCoverage issues must reduce error coverage score \
+             (clean={score_clean}, with_issues={score_with})"
+        );
     }
 }

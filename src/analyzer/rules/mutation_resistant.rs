@@ -90,8 +90,15 @@ impl AnalysisRule for MutationResistantRule {
         issues
     }
 
-    fn calculate_score(&self, _tests: &[TestCase], _issues: &[Issue]) -> u8 {
-        25
+    fn calculate_score(&self, tests: &[TestCase], issues: &[Issue]) -> u8 {
+        if tests.is_empty() {
+            return 25;
+        }
+        let count = issues
+            .iter()
+            .filter(|i| i.rule == Rule::MutationResistant)
+            .count();
+        (25i32 - (count as i32 * 3).min(15)).max(0) as u8
     }
 }
 
@@ -163,5 +170,25 @@ mod tests {
         let tests: Vec<TestCase> = vec![];
         let issues: Vec<Issue> = vec![];
         assert_eq!(rule.calculate_score(&tests, &issues), 25);
+    }
+
+    #[test]
+    fn score_decreases_with_mutation_issues() {
+        let rule = MutationResistantRule::new();
+        let tests = vec![make_test(
+            "count is positive",
+            vec![make_assertion(
+                AssertionKind::ToBeGreaterThan,
+                "expect(x).toBeGreaterThan(0)",
+            )],
+        )];
+        let tree = crate::parser::TypeScriptParser::new()
+            .unwrap()
+            .parse("test")
+            .unwrap();
+        let issues = rule.analyze(&tests, "", &tree);
+        assert!(!issues.is_empty(), "should detect mutation-resistant issue");
+        let score = rule.calculate_score(&tests, &issues);
+        assert!(score < 25, "score must be < 25 when mutation issues exist, got {score}");
     }
 }
