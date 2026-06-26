@@ -75,7 +75,7 @@ jobs:
       # Short smoke run: catches panics on arbitrary TypeScript input.
       # A crash here = a real input that makes the analyzer panic (a bug).
       - name: Smoke-run analyze_source
-        run: cargo +nightly fuzz run analyze_source -- -max_total_time=30 -rss_limit_mb=4096
+        run: cargo +nightly fuzz run analyze_source --target x86_64-unknown-linux-gnu -- -max_total_time=30 -rss_limit_mb=4096
 
   coverage:
     name: Coverage
