@@ -1,0 +1,169 @@
+{
+  "immer/draft.test.ts": {
+    "score": 46,
+    "issues": 14,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "ai-smell-tautological-assertion": 1,
+      "limited-input-variety": 3,
+      "missing-boundary-test": 1,
+      "no-assertions": 3,
+      "test-complexity": 1,
+      "trivial-assertion": 2,
+      "vacuous-test": 1,
+      "vague-test-name": 1
+    }
+  },
+  "immer/empty.test.ts": {
+    "score": 61,
+    "issues": 18,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "ai-smell-tautological-assertion": 1,
+      "assertion-intent-mismatch": 1,
+      "duplicate-test": 1,
+      "limited-input-variety": 4,
+      "trivial-assertion": 2,
+      "type-assertion-abuse": 1,
+      "vacuous-test": 1,
+      "vague-test-name": 3,
+      "weak-assertion": 3
+    }
+  },
+  "immer/immutable.test.ts": {
+    "score": 57,
+    "issues": 9,
+    "rules": {
+      "ai-smell-tautological-assertion": 1,
+      "limited-input-variety": 1,
+      "missing-boundary-test": 1,
+      "no-assertions": 1,
+      "test-complexity": 1,
+      "trivial-assertion": 2,
+      "vacuous-test": 1,
+      "vague-test-name": 1
+    }
+  },
+  "ts-pattern/bigints.test.ts": {
+    "score": 73,
+    "issues": 11,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "limited-input-variety": 3,
+      "vague-test-name": 7
+    }
+  },
+  "ts-pattern/branded-nominal-types.test.ts": {
+    "score": 74,
+    "issues": 4,
+    "rules": {
+      "flaky-pattern": 1,
+      "limited-input-variety": 2,
+      "no-assertions": 1
+    }
+  },
+  "ts-pattern/generics.test.ts": {
+    "score": 30,
+    "issues": 10,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "limited-input-variety": 3,
+      "missing-boundary-test": 1,
+      "no-assertions": 5
+    }
+  },
+  "ts-pattern/helpers.test.ts": {
+    "score": 30,
+    "issues": 12,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "limited-input-variety": 3,
+      "missing-boundary-test": 1,
+      "no-assertions": 6,
+      "vague-test-name": 1
+    }
+  },
+  "ts-pattern/instance-of.test.ts": {
+    "score": 82,
+    "issues": 3,
+    "rules": {
+      "limited-input-variety": 2,
+      "missing-error-test": 1
+    }
+  },
+  "ts-pattern/lists.test.ts": {
+    "score": 67,
+    "issues": 6,
+    "rules": {
+      "ai-smell-happy-path-only": 1,
+      "limited-input-variety": 3,
+      "no-assertions": 2
+    }
+  },
+  "zod/all-errors.test.ts": {
+    "score": 56,
+    "issues": 14,
+    "rules": {
+      "limited-input-variety": 1,
+      "missing-error-test": 1,
+      "no-assertions": 5,
+      "test-complexity": 1,
+      "type-assertion-abuse": 4,
+      "vague-test-name": 2
+    }
+  },
+  "zod/array.test.ts": {
+    "score": 76,
+    "issues": 11,
+    "rules": {
+      "limited-input-variety": 3,
+      "missing-boundary-test": 2,
+      "missing-error-test": 1,
+      "no-assertions": 1,
+      "type-assertion-abuse": 1,
+      "vague-test-name": 3
+    }
+  },
+  "zod/async-refinements.test.ts": {
+    "score": 70,
+    "issues": 12,
+    "rules": {
+      "duplicate-test": 1,
+      "limited-input-variety": 4,
+      "type-assertion-abuse": 1,
+      "vague-test-name": 3,
+      "weak-assertion": 3
+    }
+  },
+  "zod/bigint.test.ts": {
+    "score": 79,
+    "issues": 5,
+    "rules": {
+      "no-assertions": 1,
+      "type-assertion-abuse": 1,
+      "vague-test-name": 3
+    }
+  },
+  "zod/branded.test.ts": {
+    "score": 30,
+    "issues": 7,
+    "rules": {
+      "limited-input-variety": 2,
+      "missing-boundary-test": 1,
+      "no-assertions": 1,
+      "type-assertion-abuse": 2,
+      "vague-test-name": 1
+    }
+  },
+  "zod/coerce.test.ts": {
+    "score": 54,
+    "issues": 21,
+    "rules": {
+      "flaky-pattern": 9,
+      "missing-boundary-test": 1,
+      "test-complexity": 5,
+      "type-assertion-abuse": 1,
+      "vague-test-name": 5
+    }
+  }
+}
