@@ -16,16 +16,8 @@ Rigor is a **test quality linter** — it scores your tests across assertion qua
 
 ## Installation
 
-```bash
-npm install -g rigor-cli
-# or
-npx rigor-cli src/
-```
-
-**Pre-built binaries:**
-
-Download from [GitHub Releases](https://github.com/enriquesanchez-elastic/rigor/releases):
-- Linux (x86_64, ARM64)
+**Pre-built binaries** — download from [GitHub Releases](https://github.com/enriquesanchez-elastic/rigor/releases):
+- Linux (x86_64, ARM64, musl)
 - macOS (Intel, Apple Silicon)
 - Windows (x86_64)
 
@@ -117,21 +109,14 @@ rigor mcp
 
 Works with Cursor, Continue, Cline, and any MCP-compatible tool. See [docs/mcp-integration.md](docs/mcp-integration.md).
 
-## Programmatic API
+## Stdin / Programmatic Use
 
 ```bash
 # Analyze from stdin
 echo 'test source...' | rigor --stdin --stdin-filename test.test.ts --json
 ```
 
-Node.js SDK (`@rigor/sdk`):
-```typescript
-import { analyze, analyzeSource } from '@rigor/sdk';
-const result = await analyze('src/auth.test.ts');
-console.log(result.score, result.issues);
-```
-
-See [docs/api.md](docs/api.md) for the full API reference.
+See [docs/api.md](docs/api.md) for the JSON output contract.
 
 ## Configuration
 
@@ -178,9 +163,12 @@ Options:
 ## CI Integration
 
 ```yaml
-# GitHub Actions
+# GitHub Actions — download binary from releases
 - name: Check Test Quality
-  run: npx rigor-cli src/ --threshold 75
+  run: |
+    curl -sSL https://github.com/enriquesanchez-elastic/rigor/releases/latest/download/rigor-linux-x86_64 -o rigor
+    chmod +x rigor
+    ./rigor src/ --threshold 75
 ```
 
 ```bash
@@ -222,16 +210,6 @@ cargo llvm-cov report --html             # open target/llvm-cov/html/index.html
 ```
 
 CI runs coverage on every push; the lcov report is uploaded as a workflow artifact.
-
-## Editor Integration
-
-### VS Code
-
-Install the `vscode-rigor` extension for inline diagnostics powered by the `rigor-lsp` language server. Diagnostics appear on save for all test files (`.test.ts`, `.spec.ts`, `.cy.ts`).
-
-### LSP
-
-The `rigor-lsp` binary works with any LSP-compatible editor (Neovim, Helix, etc.). Build from source with `cargo build --release`; the binary is at `target/release/rigor-lsp`.
 
 ## Documentation
 
