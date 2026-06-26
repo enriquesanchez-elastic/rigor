@@ -242,6 +242,24 @@ impl<'a> TestFileParser<'a> {
             }
         }
 
+        // Check for bare `assert(value[, message])` calls. node:assert and
+        // chai both expose `assert` as a callable assertion (not only the
+        // `assert.equal(...)` member form handled above). Match the exact
+        // identifier `assert` so helpers like `assertType` are not swept in.
+        if function.kind() == "identifier" && self.node_text(function) == "assert" {
+            let location = Location::new(
+                node.start_position().row + 1,
+                node.start_position().column + 1,
+            );
+
+            return Some(Assertion {
+                kind: AssertionKind::Assert,
+                quality: AssertionKind::Assert.quality(),
+                location,
+                raw: self.node_text(node).to_string(),
+            });
+        }
+
         // Check for Cypress .should() pattern: cy.get(...).should('exist'), .should('be.visible'), etc.
         if function.kind() == "member_expression" {
             let property = function.child_by_field_name("property")?;
@@ -575,6 +593,46 @@ mod tests {
             tests[1].assertions[0].kind,
             AssertionKind::ToThrow
         ));
+    }
+
+    #[test]
+    fn test_extract_bare_assert_call() {
+        // node:assert and chai expose `assert(value[, message])` as a directly
+        // callable assertion, not only `assert.equal(...)`. Both forms count.
+        let source = r#"
+            it('bare assert', () => {
+                assert(value);
+            });
+            it('assert with message', () => {
+                assert(value, 'should be truthy');
+            });
+            it('assert member still works', () => {
+                assert.equal(a, b);
+            });
+        "#;
+
+        let mut parser = TypeScriptParser::new().unwrap();
+        let tree = parser.parse(source).unwrap();
+        let test_parser = TestFileParser::new(source);
+        let tests = test_parser.extract_tests(&tree);
+
+        assert_eq!(tests.len(), 3);
+        assert_eq!(
+            tests[0].assertions.len(),
+            1,
+            "bare assert(x) should count as an assertion"
+        );
+        assert_eq!(
+            tests[1].assertions.len(),
+            1,
+            "assert(x, msg) should count as an assertion"
+        );
+        assert_eq!(
+            tests[2].assertions.len(),
+            1,
+            "assert.equal(...) must still count"
+        );
+        assert!(matches!(tests[0].assertions[0].kind, AssertionKind::Assert));
     }
 
     #[test]

@@ -1,15 +1,15 @@
 {
   "immer/draft.test.ts": {
-    "score": 46,
-    "issues": 14,
+    "score": 55,
+    "issues": 12,
     "rules": {
       "ai-smell-happy-path-only": 1,
       "ai-smell-tautological-assertion": 1,
       "limited-input-variety": 3,
       "missing-boundary-test": 1,
-      "no-assertions": 3,
+      "no-assertions": 2,
       "test-complexity": 1,
-      "trivial-assertion": 2,
+      "trivial-assertion": 1,
       "vacuous-test": 1,
       "vague-test-name": 1
     }
@@ -31,15 +31,13 @@
     }
   },
   "immer/immutable.test.ts": {
-    "score": 57,
-    "issues": 9,
+    "score": 71,
+    "issues": 6,
     "rules": {
       "ai-smell-tautological-assertion": 1,
       "limited-input-variety": 1,
-      "missing-boundary-test": 1,
-      "no-assertions": 1,
       "test-complexity": 1,
-      "trivial-assertion": 2,
+      "trivial-assertion": 1,
       "vacuous-test": 1,
       "vague-test-name": 1
     }
