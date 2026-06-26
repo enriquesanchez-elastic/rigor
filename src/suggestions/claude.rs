@@ -8,6 +8,10 @@
 use crate::AnalysisResult;
 
 /// Claude API client for generating test improvements
+// Fields are only read by the HTTP request path, which is gated behind the
+// `ai` feature. Without it, the client is still constructible (builders) but
+// the fields are never read — so suppress dead_code on non-`ai` builds.
+#[cfg_attr(not(feature = "ai"), allow(dead_code))]
 pub struct ClaudeClient {
     api_key: String,
     model: String,

@@ -1,0 +1,25 @@
+[package]
+name = "rigor-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace so the nightly-only fuzz crate does not pull into the
+# main `cargo build` / `cargo test` workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.rigor]
+path = ".."
+
+[[bin]]
+name = "analyze_source"
+path = "fuzz_targets/analyze_source.rs"
+test = false
+doc = false
+bench = false

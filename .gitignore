@@ -24,3 +24,11 @@ Thumbs.db
 .rigor-cache.json
 .rigor-history.json
 lcov.info
+
+# Generated reports (rigor's own HTML output)
+/rigor-report.html
+
+# cargo-fuzz artifacts
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
