@@ -47,6 +47,36 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
 
+  fuzz:
+    name: Fuzz smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            fuzz/target
+          key: ${{ runner.os }}-fuzz-${{ hashFiles('fuzz/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-fuzz-
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+
+      # Short smoke run: catches panics on arbitrary TypeScript input.
+      # A crash here = a real input that makes the analyzer panic (a bug).
+      - name: Smoke-run analyze_source
+        run: cargo +nightly fuzz run analyze_source -- -max_total_time=30 -rss_limit_mb=4096
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
